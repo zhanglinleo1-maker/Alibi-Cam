@@ -7,9 +7,11 @@ import android.os.Binder
 import android.os.IBinder
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
 import app.myzel394.alibi.NotificationHelper
 import app.myzel394.alibi.enums.RecorderState
 import app.myzel394.alibi.ui.utils.PermissionHelper
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.time.LocalDateTime
 import java.util.concurrent.Executors
@@ -115,6 +117,10 @@ abstract class RecorderService : LifecycleService() {
                 } ?: RecorderState.STOPPED
                 changeState(newState)
             }
+
+            "stopRecording" -> {
+                handleStopFromNotification()
+            }
         }
 
         return super.onStartCommand(intent, flags, startId)
@@ -202,6 +208,20 @@ abstract class RecorderService : LifecycleService() {
         }
     }
 
+
+    /**
+     * Called when the user taps "Stop & Save" in the notification.
+     *
+     * Default implementation stops recording and destroys the service.
+     * Subclasses that need to persist recording info before destroying
+     * (e.g. [VideoRecorderService]) should override this.
+     */
+    protected open fun handleStopFromNotification() {
+        lifecycleScope.launch {
+            stopRecording()
+            destroy()
+        }
+    }
 
     // Throw this error if you show a dialog yourself.
     // This will prevent the service from showing their generic error dialog.

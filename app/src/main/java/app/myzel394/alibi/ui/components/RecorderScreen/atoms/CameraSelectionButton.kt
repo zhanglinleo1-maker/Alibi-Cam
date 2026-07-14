@@ -99,5 +99,6 @@ val CAMERA_LENS_ICON_MAP = mapOf(
     CameraInfo.Lens.BACK to Icons.Default.Camera,
     CameraInfo.Lens.FRONT to Icons.Default.Person,
     CameraInfo.Lens.EXTERNAL to Icons.Default.Videocam,
+    CameraInfo.Lens.ULTRA_WIDE to Icons.Default.Videocam,
     CameraInfo.Lens.UNKNOWN to Icons.Default.QuestionMark,
 )

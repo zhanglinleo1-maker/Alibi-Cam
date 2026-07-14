@@ -66,6 +66,17 @@ data class RecorderNotificationHelper(
         )
     }
 
+    private fun getStopRecordingIntent(requestCode: Int): PendingIntent {
+        return PendingIntent.getService(
+            context,
+            requestCode,
+            Intent(context, context::class.java).apply {
+                action = "stopRecording"
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
     private fun getIconID(): Int = details?.icon ?: R.drawable.launcher_monochrome_noopacity
 
     private fun createBaseNotification(): NotificationCompat.Builder {
@@ -127,6 +138,11 @@ data class RecorderNotificationHelper(
                 R.drawable.ic_pause,
                 context.getString(R.string.ui_recorder_action_pause_label),
                 getNotificationChangeStateIntent(RecorderState.PAUSED, 2),
+            )
+            .addAction(
+                R.drawable.ic_stop,
+                context.getString(R.string.ui_recorder_action_stop_save),
+                getStopRecordingIntent(4),
             )
             .setContentTitle(
                 details?.title

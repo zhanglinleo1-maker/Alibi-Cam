@@ -3,27 +3,34 @@
     android:height="250dp"
     android:viewportWidth="250"
     android:viewportHeight="250">
+  <!-- 黑色圆形底座 -->
   <path
       android:pathData="M125,125m-66,0a66,66 0,1 1,132 0a66,66 0,1 1,-132 0"
       android:fillColor="#1D1D1D"/>
+  <!-- 蒙面上半部 -->
   <path
       android:pathData="M175,137C175,109.39 152.61,87 125,87C97.39,87 75,109.39 75,137H175Z"
       android:fillColor="#3D3D3D"
       android:fillType="evenOdd"/>
+  <!-- 蒙面鼻子 -->
   <path
       android:pathData="M173.91,139H76.09C90.55,147.13 107.23,151.76 125,151.76C142.77,151.76 159.45,147.13 173.91,139Z"
       android:fillColor="#3D3D3D"
       android:fillType="evenOdd"/>
+  <!-- 左眼白 -->
   <path
       android:pathData="M100,137m-25,0a25,25 0,1 1,50 0a25,25 0,1 1,-50 0"
       android:fillColor="#ffffff"/>
+  <!-- 左瞳孔（红） -->
   <path
       android:pathData="M100,137m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0"
-      android:fillColor="#3D3D3D"/>
+      android:fillColor="#E53935"/>
+  <!-- 右眼白 -->
   <path
       android:pathData="M150,137m-25,0a25,25 0,1 1,50 0a25,25 0,1 1,-50 0"
       android:fillColor="#ffffff"/>
+  <!-- 右瞳孔（红） -->
   <path
       android:pathData="M150,137m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0"
-      android:fillColor="#3D3D3D"/>
+      android:fillColor="#E53935"/>
 </vector>

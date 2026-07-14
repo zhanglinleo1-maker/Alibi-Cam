@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep smart-exception classes needed by ffmpeg-kit at runtime.
+# Without these, FFmpegKitConfig crashes with NoClassDefFoundError
+# when auto-stop triggers getRecordingInformation() → getBatchesForFFmpeg().
+-keep class com.arthenica.smartexception.** { *; }

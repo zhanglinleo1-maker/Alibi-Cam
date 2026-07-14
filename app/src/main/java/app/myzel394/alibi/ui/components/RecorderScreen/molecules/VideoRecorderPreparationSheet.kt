@@ -82,7 +82,7 @@ fun VideoRecorderPreparationSheet(
     val cameras = CameraInfo.queryAvailableCameras(context)
 
     LaunchedEffect(Unit) {
-        videoSettings.init(context)
+        videoSettings.init(context, null) // Settings applied from preference, camera auto-detection
     }
 
     ModalBottomSheet(

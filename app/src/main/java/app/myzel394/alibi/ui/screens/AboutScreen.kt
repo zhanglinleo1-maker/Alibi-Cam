@@ -116,13 +116,64 @@ fun AboutScreen(
                     style = MaterialTheme.typography.headlineLarge,
                 )
                 Text(
-                    text = "Version %s (%s)".format(
-                        BuildConfig.VERSION_NAME,
-                        BuildConfig.VERSION_CODE.toString()
-                    ),
+                    text = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) — Leo魔改版",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
+            // ── Leo魔改版说明 ──
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "关于Alibi Leo魔改版",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = "关于Alibi，您现在使用的Alibi是Leo同学基于开源软件Alibi的修改版本。" +
+                            "Leo同学基于两轮车行车记录仪的需求，做了一些优化调整，包括：\n" +
+                            "• 摄像头增加超广角选项\n" +
+                            "• 增加录制比例 4:3 选项\n" +
+                            "• 增加 NFC 启动模式\n" +
+                            "• 增加打开 App 自动录制选项\n" +
+                            "• 增加手机姿态感知停止录像模式\n" +
+                            "• 修改最大时长和片段时长的存储逻辑\n" +
+                            "• 修改默认录制参数\n" +
+                            "简单来说，增强了易用性，实现快速无感的使用。\n\n" +
+                            "如有使用上的问题，可以联系Leo同学：",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                // Leo 邮箱，点击复制
+                val leoEmail = "915945107@qq.com"
+                val clipboardManager =
+                    LocalContext.current.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                Row(
+                    modifier = Modifier
+                        .clip(MaterialTheme.shapes.medium)
+                        .clickable {
+                            val clip = ClipData.newPlainText("email", leoEmail)
+                            clipboardManager.setPrimaryClip(clip)
+                        }
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(ButtonDefaults.IconSize),
+                    )
+                    Text(
+                        text = leoEmail,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                Text(
+                    text = "亦可直接联系原作者 Myzel394。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
             Column(
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {

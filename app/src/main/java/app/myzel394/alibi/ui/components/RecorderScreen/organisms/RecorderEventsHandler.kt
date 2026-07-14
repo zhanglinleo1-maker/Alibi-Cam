@@ -1,6 +1,8 @@
 package app.myzel394.alibi.ui.components.RecorderScreen.organisms
 
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
@@ -172,7 +174,11 @@ fun RecorderEventsHandler(
                         VideoRecorderModel::class.java -> VideoBatchesFolder.importFromFolder(
                             recording.folderPath,
                             context
-                        )
+                        ).also {
+                            // Restore sessionId so getBatchesForFFmpeg() filters
+                            // only this session's chunks.
+                            it.sessionId = recording.sessionId
+                        }
 
                         else -> throw Exception("Unknown recorder type")
                     }
@@ -182,29 +188,57 @@ fun RecorderEventsHandler(
                         recording.fileExtension,
                     )
 
-                    batchesFolder.concatenate(
-                        recording,
-                        filenameFormat = settings.filenameFormat,
-                        fileName = fileName,
-                        onProgress = { percentage ->
-                            processingProgress = percentage
-                        }
-                    )
+                    // ── Video MEDIA/CUSTOM: chunks already accessible ──
+                    // For INTERNAL, fall through to the type switch for SAF export.
+                    if ((recorder as Any) is VideoRecorderModel && batchesFolder.type != BatchesFolder.BatchType.INTERNAL) {
+                        showSnackbar()
+                        return@runBlocking
+                    }
+
+                    // ── Concatenation: MEDIA/CUSTOM only ──
+                    // INTERNAL storage skips FFmpeg entirely — individual chunks
+                    // are already playable MP4/AAC files and can be exported as-is.
+                    // This also avoids FFmpegKit dependency issues (missing
+                    // smartexception library in the 6.0-2.LTS AAR from Appodeal).
+                    if (batchesFolder.type != BatchesFolder.BatchType.INTERNAL) {
+                        batchesFolder.concatenate(
+                            recording,
+                            filenameFormat = settings.filenameFormat,
+                            fileName = fileName,
+                            onProgress = { percentage ->
+                                processingProgress = percentage
+                            }
+                        )
+                    }
 
                     // Save file
                     when (batchesFolder.type) {
                         BatchesFolder.BatchType.INTERNAL -> {
-                            when (batchesFolder) {
-                                is AudioBatchesFolder -> {
-                                    saveAudioFile(
-                                        batchesFolder.asInternalGetOutputFile(fileName), fileName
-                                    )
-                                }
-
-                                is VideoBatchesFolder -> {
-                                    saveVideoFile(
-                                        batchesFolder.asInternalGetOutputFile(fileName), fileName
-                                    )
+                            // Export individual chunks without FFmpeg merging.
+                            // Each chunk is a self-contained playable media file.
+                            // SAF launch MUST be on the main thread — we are inside
+                            // thread { runBlocking { } } which is a background thread.
+                            val mainHandler = Handler(Looper.getMainLooper())
+                            // List files directly — VideoBatchesFolder.getBatchesForFFmpeg()
+                            // uses session-prefix filtering (listSessionChunkNames) which
+                            // doesn't match INTERNAL flat-storage naming (1.mp4, 2.mp4…).
+                            val internalDir = batchesFolder.getInternalFolder()
+                            val chunkFiles = (internalDir.listFiles()
+                                ?.filter { it.isFile && it.nameWithoutExtension.toIntOrNull() != null }
+                                ?.sortedBy { it.nameWithoutExtension.toInt() }
+                                ?: emptyList())
+                            if (chunkFiles.isNotEmpty()) {
+                                when (batchesFolder) {
+                                    is AudioBatchesFolder -> {
+                                        mainHandler.post {
+                                            saveAudioFile(chunkFiles.first(), fileName)
+                                        }
+                                    }
+                                    is VideoBatchesFolder -> {
+                                        mainHandler.post {
+                                            saveVideoFile(chunkFiles.first(), fileName)
+                                        }
+                                    }
                                 }
                             }
                         }

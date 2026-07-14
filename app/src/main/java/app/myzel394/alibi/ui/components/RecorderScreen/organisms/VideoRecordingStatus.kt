@@ -41,7 +41,6 @@ import app.myzel394.alibi.ui.components.RecorderScreen.molecules.RecordingContro
 import app.myzel394.alibi.ui.components.RecorderScreen.molecules.RecordingStatus
 import app.myzel394.alibi.ui.models.VideoRecorderModel
 import app.myzel394.alibi.ui.utils.CameraInfo
-import app.myzel394.alibi.ui.utils.KeepScreenOn
 import com.valentinilk.shimmer.shimmer
 import kotlinx.coroutines.launch
 
@@ -50,8 +49,6 @@ fun VideoRecordingStatus(
     videoRecorder: VideoRecorderModel,
 ) {
     val orientation = LocalConfiguration.current.orientation
-
-    KeepScreenOn()
 
     when (orientation) {
         Configuration.ORIENTATION_LANDSCAPE -> {
@@ -160,19 +157,7 @@ fun _VideoGeneralInfo(videoRecorder: VideoRecorderModel) {
             Text(
                 stringResource(
                     R.string.form_value_selected,
-                    if (CameraInfo.checkHasNormalCameras(availableCameras)) {
-                        videoRecorder.cameraID.let {
-                            if (it == CameraInfo.Lens.BACK.androidValue)
-                                stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_back_label)
-                            else
-                                stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_front_label)
-                        }
-                    } else {
-                        stringResource(
-                            R.string.ui_videoRecorder_action_start_settings_cameraLens_label,
-                            videoRecorder.cameraID
-                        )
-                    }
+                    getCameraLabel(videoRecorder, availableCameras)
                 ),
                 style = MaterialTheme.typography.labelMedium,
             )
@@ -292,4 +277,29 @@ fun _VideoControls(videoRecorder: VideoRecorderModel) {
             )
         }
     }
+}
+
+/**
+ * Get a human-readable label for the currently selected camera.
+ * Selection is now based on cameraLensMode (zoom-driven), not physical camera IDs.
+ */
+@Composable
+private fun getCameraLabel(
+    videoRecorder: VideoRecorderModel,
+    availableCameras: List<CameraInfo>,
+): String {
+    // Ultra-wide mode (zoom-based, not ID-based)
+    if (videoRecorder.cameraLensMode == "ultrawide") {
+        return stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_ultrawide_label)
+    }
+    // Main back camera mode
+    if (videoRecorder.cameraLensMode == "main") {
+        return stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_main_label)
+    }
+    // Front camera
+    if (videoRecorder.cameraID == androidx.camera.core.CameraSelector.LENS_FACING_FRONT) {
+        return stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_front_label)
+    }
+    // Default back camera
+    return stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_back_label)
 }

@@ -15,3 +15,18 @@
 .cxx
 local.properties
 key.properties
+
+# Claude Code session files
+.claude/
+*.csv
+*.log
+
+# Signing keys (DO NOT commit!)
+*.keystore
+*.jks
+
+# IDE
+.vscode/
+
+# Backup files
+*.bak

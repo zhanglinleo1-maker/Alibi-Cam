@@ -43,6 +43,19 @@ abstract class BatchesFolder(
     abstract val scopedMediaContentUri: Uri
     abstract val legacyMediaFolder: File
 
+    /**
+     * If non-null, chunks are written into a task-specific subfolder (e.g. "20260703174830/").
+     * Audio recorder does not set this — only video uses per-task subfolders.
+     */
+    var taskFolderName: String? = null
+
+    /**
+     * 是否物理删除文件（不进系统回收站）。
+     * 由 IntervalRecorderService 从 AppSettings 同步。
+     * 仅对 BatchType.MEDIA + API 29+ 生效。
+     */
+    var permanentlyDeleteRecordings: Boolean = false
+
     val mediaPrefix
         get() = MEDIA_RECORDINGS_PREFIX + subfolderName.substring(1) + "-"
 
@@ -117,20 +130,25 @@ abstract class BatchesFolder(
         }
     }
 
-    fun getBatchesForFFmpeg(): List<String> {
+    open fun getBatchesForFFmpeg(): List<String> {
         return when (type) {
-            BatchType.INTERNAL ->
-                ((getInternalFolder()
-                    .listFiles()
+            BatchType.INTERNAL -> {
+                val searchDir = if (taskFolderName != null) {
+                    File(getInternalFolder(), taskFolderName!!)
+                } else {
+                    getInternalFolder()
+                }
+                (searchDir.listFiles()
                     ?.filter {
                         it.nameWithoutExtension.toIntOrNull() != null
                     }
                     ?.toList()
-                    ?: emptyList()) as List<File>)
+                    ?: emptyList<File>())
                     .sortedBy {
                         it.nameWithoutExtension.toInt()
                     }
                     .map { it.absolutePath }
+            }
 
             BatchType.CUSTOM -> getCustomDefinedFolder()
                 .listFiles()
@@ -317,14 +335,49 @@ abstract class BatchesFolder(
 
             BatchType.MEDIA -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    // TODO: Also delete pending recordings
-                    // --> Doesn't seem to be possible :/
-                    context.contentResolver.delete(
-                        scopedMediaContentUri,
-                        "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE '$mediaPrefix%'",
-                        null,
-                    )
+                    if (permanentlyDeleteRecordings) {
+                        // 永久删除：先物理删文件，再清 MediaStore 条目
+                        val deletableUris = mutableListOf<Uri>()
+                        queryMediaContent { _, _, uri, _ ->
+                            deletableUris.add(uri)
+                        }
 
+                        for (uri in deletableUris) {
+                            try {
+                                context.contentResolver.query(
+                                    uri,
+                                    arrayOf(
+                                        MediaStore.MediaColumns.RELATIVE_PATH,
+                                        MediaStore.MediaColumns.DISPLAY_NAME
+                                    ),
+                                    null, null, null
+                                )?.use { cursor ->
+                                    if (cursor.moveToFirst()) {
+                                        val relPathIdx = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+                                        val nameIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                                        if (relPathIdx != -1 && nameIdx != -1) {
+                                            val relPath = cursor.getString(relPathIdx) ?: ""
+                                            val name = cursor.getString(nameIdx) ?: ""
+                                            val physicalFile = java.io.File(
+                                                Environment.getExternalStorageDirectory(),
+                                                relPath + name
+                                            )
+                                            physicalFile.delete()
+                                        }
+                                    }
+                                }
+                                context.contentResolver.delete(uri, null, null)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "永久删除失败: $uri", e)
+                            }
+                        }
+                    } else {
+                        context.contentResolver.delete(
+                            scopedMediaContentUri,
+                            "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE '$mediaPrefix%'",
+                            null,
+                        )
+                    }
                 } else {
                     legacyMediaFolder.deleteRecursively()
                 }
@@ -334,7 +387,14 @@ abstract class BatchesFolder(
 
     fun hasRecordingsAvailable(): Boolean {
         return when (type) {
-            BatchType.INTERNAL -> getInternalFolder().listFiles()?.isNotEmpty() ?: false
+            BatchType.INTERNAL -> {
+                val dir = if (taskFolderName != null) {
+                    File(getInternalFolder(), taskFolderName!!)
+                } else {
+                    getInternalFolder()
+                }
+                dir.listFiles()?.isNotEmpty() ?: false
+            }
 
             BatchType.CUSTOM -> customFolder?.findFile(subfolderName)?.listFiles()?.isNotEmpty()
                 ?: false
@@ -383,32 +443,75 @@ abstract class BatchesFolder(
 
             BatchType.MEDIA -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val deletableNames = mutableListOf<String>()
-
-                    queryMediaContent { rawName, counter, _, _ ->
-                        if (counter in range) {
-                            deletableNames.add(rawName)
+                    if (permanentlyDeleteRecordings) {
+                        // ── 永久删除：先物理删除文件，再清理 MediaStore 条目 ──
+                        // 部分厂商（小米/OPPO/vivo等）会拦截 contentResolver.delete()
+                        // 放进系统回收站。物理删除文件可以绕过回收站。
+                        val deletableUris = mutableListOf<Uri>()
+                        queryMediaContent { _, counter, uri, _ ->
+                            if (counter in range) {
+                                deletableUris.add(uri)
+                            }
                         }
-                    }
 
-                    try {
-                        context.contentResolver.delete(
-                            scopedMediaContentUri,
-                            "${MediaStore.MediaColumns.DISPLAY_NAME} IN (${
-                                deletableNames.joinToString(
-                                    ","
-                                ) { "'$it'" }
-                            })",
-                            null,
-                        )
-                        // This is unfortunate if the files can't be deleted, but let's just
-                        // ignore it since we can't do anything about it
-                    } catch (e: RuntimeException) {
-                        // Probably file not found
-                        e.printStackTrace()
-                    } catch (e: IllegalArgumentException) {
-                        // Strange filename, should not happen
-                        e.printStackTrace()
+                        for (uri in deletableUris) {
+                            try {
+                                // 从 MediaStore 查询 RELATIVE_PATH + DISPLAY_NAME 构建物理路径
+                                context.contentResolver.query(
+                                    uri,
+                                    arrayOf(
+                                        MediaStore.MediaColumns.RELATIVE_PATH,
+                                        MediaStore.MediaColumns.DISPLAY_NAME
+                                    ),
+                                    null, null, null
+                                )?.use { cursor ->
+                                    if (cursor.moveToFirst()) {
+                                        val relPathIdx = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+                                        val nameIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                                        if (relPathIdx != -1 && nameIdx != -1) {
+                                            val relPath = cursor.getString(relPathIdx) ?: ""
+                                            val name = cursor.getString(nameIdx) ?: ""
+                                            val physicalFile = java.io.File(
+                                                Environment.getExternalStorageDirectory(),
+                                                relPath + name
+                                            )
+                                            physicalFile.delete()  // 物理删除（绕过回收站）
+                                        }
+                                    }
+                                }
+
+                                // 清理 MediaStore 条目
+                                context.contentResolver.delete(uri, null, null)
+                            } catch (e: Exception) {
+                                // 单个文件删除失败不影响其他文件
+                                Log.w(TAG, "永久删除失败: $uri", e)
+                            }
+                        }
+                    } else {
+                        // ── 普通删除：走 MediaStore API（可能进回收站）──
+                        val deletableNames = mutableListOf<String>()
+
+                        queryMediaContent { rawName, counter, _, _ ->
+                            if (counter in range) {
+                                deletableNames.add(rawName)
+                            }
+                        }
+
+                        try {
+                            context.contentResolver.delete(
+                                scopedMediaContentUri,
+                                "${MediaStore.MediaColumns.DISPLAY_NAME} IN (${
+                                    deletableNames.joinToString(
+                                        ","
+                                    ) { "'$it'" }
+                                })",
+                                null,
+                            )
+                        } catch (e: RuntimeException) {
+                            e.printStackTrace()
+                        } catch (e: IllegalArgumentException) {
+                            e.printStackTrace()
+                        }
                     }
                 } else {
                     // TODO: Fix "would you like to try saving" -> Save button
@@ -453,7 +556,66 @@ abstract class BatchesFolder(
     }
 
     fun asInternalGetFile(counter: Long, fileExtension: String): File {
-        return File(getInternalFolder(), "$counter.$fileExtension")
+        val dir = if (taskFolderName != null) {
+            File(getInternalFolder(), taskFolderName!!).also { it.mkdirs() }
+        } else {
+            getInternalFolder()
+        }
+        val name = if (taskFolderName != null) {
+            "%03d.%s".format(counter, fileExtension)
+        } else {
+            "$counter.$fileExtension"
+        }
+        return File(dir, name)
+    }
+
+    /**
+     * Resolves the directory for a given task folder name (INTERNAL type only).
+     */
+    fun getTaskFolderDir(taskFolderName: String): File {
+        return File(getInternalFolder(), taskFolderName)
+    }
+
+    /**
+     * Lists all task folder names (timestamp-based directory names) sorted ascending.
+     * The default implementation handles INTERNAL type; MEDIA/CUSTOM override in subclasses.
+     */
+    open fun listTaskFolderNames(): List<String> {
+        return getInternalFolder().listFiles()
+            ?.filter { it.isDirectory && it.name?.toLongOrNull() != null }
+            ?.map { it.name!! }
+            ?.sorted()
+            ?: emptyList()
+    }
+
+    /**
+     * Lists chunk filenames in a task folder, sorted ascending.
+     */
+    open fun listChunksInTaskFolder(taskFolderName: String): List<String> {
+        return getTaskFolderDir(taskFolderName).listFiles()
+            ?.filter { it.isFile && it.nameWithoutExtension.toIntOrNull() != null }
+            ?.map { it.name!! }
+            ?.sorted()
+            ?: emptyList()
+    }
+
+    /**
+     * Deletes a single chunk file from a task folder.
+     */
+    open fun deleteChunk(taskFolderName: String, chunkName: String): Boolean {
+        return File(getTaskFolderDir(taskFolderName), chunkName).delete()
+    }
+
+    /**
+     * Deletes a task folder if it is empty.
+     */
+    open fun deleteTaskFolderIfEmpty(taskFolderName: String): Boolean {
+        val dir = getTaskFolderDir(taskFolderName)
+        return if (dir.isDirectory && dir.listFiles()?.isEmpty() == true) {
+            dir.delete()
+        } else {
+            false
+        }
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
@@ -573,6 +735,8 @@ abstract class BatchesFolder(
     }
 
     companion object {
+        private const val TAG = "BatchesFolder"
+
         fun requiredBytesForOneMinuteOfRecording(appSettings: AppSettings): Long {
             // 350 MiB sounds like a good default
             return 350 * 1024 * 1024

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="app_name">Alibi</string>
+    <string name="app_name">Alibi Cam</string>
     <string name="dialog_close_cancel_label">取消</string>
     <string name="dialog_close_neutral_label">确定</string>
     <string name="continue_label">继续</string>
@@ -23,7 +23,8 @@
     <string name="ui_recorder_action_delete_confirm_message">您确定要删除此录制？</string>
     <string name="ui_recorder_action_pause_label">暂停</string>
     <string name="ui_recorder_action_resume_label">继续</string>
-    <string name="ui_recorder_action_save_label">保存​​</string>
+    <string name="ui_recorder_action_save_label">保存并退出</string>
+    <string name="ui_recorder_action_stop_save">停止并保存</string>
     <string name="ui_recorder_action_save_success">您的录制已成功保存！</string>
     <string name="ui_recorder_action_save_openFolder">打开</string>
     <string name="ui_recorder_action_start_description_1">Alibi 将在后台持续工作，并按您的要求保存最近\u0020</string>
@@ -44,6 +45,7 @@
     <string name="ui_welcome_explanation_message">Alibi就像你手机上的行车记录仪一样。它会持续进行录制，并按您的要求保存最近30分钟的录制文件。</string>
     <string name="ui_welcome_responsibility_title">您需要自行承担使用该应用程序所带来的风险和后果。</string>
     <string name="ui_welcome_responsibility_message">Alibi不对该应用程序的使用负任何责任。您在使用时需自行承担使用风险。</string>
+    <string name="ui_welcome_privacy_notice">隐私说明：首次启动时，本应用会通过飞书机器人向开发者发送匿名的设备信息（设备型号、Android版本、应用版本、匿名标识符），仅用于统计安装数量。不会收集任何个人信息、位置信息或使用行为数据。如有疑问请联系开发者。</string>
     <string name="ui_welcome_start_label">开始使用 Alibi</string>
     <string name="ui_settings_title">设置</string>
     <string name="ui_settings_advancedSettings_label">高级设置</string>
@@ -52,7 +54,7 @@
     <string name="ui_settings_option_maxDuration_title">最大时长</string>
     <string name="ui_settings_option_maxDuration_description">设置录制的最大持续时间</string>
     <string name="ui_settings_option_intervalDuration_title">片段时长</string>
-    <string name="ui_settings_option_intervalDuration_description">按照指定的时长录制一个单独的片段。Alibi 会录制多个片段并删除最旧的片段。导出录制时，会把所有片段合并后导出。</string>
+    <string name="ui_settings_option_intervalDuration_description">按照指定的时长录制一个单独的片段。Alibi 会录制多个片段并删除最旧的片段。</string>
     <string name="ui_settings_option_bitrate_title">比特率</string>
     <string name="ui_settings_option_bitrate_description">更高的比特率意味着更好的录制质量以及更大的储存空间占用</string>
     <string name="ui_settings_option_bitrate_explanation">为音频录制设置比特率</string>
@@ -105,7 +107,19 @@
     <string name="ui_about_gpg_key_copy">复制 GPG 密钥</string>
     <string name="ui_about_contribute_donation_githubSponsors">成为 GitHub 赞助者</string>
     <string name="ui_settings_option_deleteRecordingsImmediately_title">即时删除片段文件</string>
-    <string name="ui_settings_option_deleteRecordingsImmediately_description">如果启用，Alibi 将在保存文件后立即删除录制的片段文件。</string>
+    <string name="ui_settings_option_deleteRecordingsImmediately_description">如果启用，Alibi 将在保存文件后立即删除录制的片段文件。（仅对存储模式为加密的内部存储有效）</string>
+    <string name="ui_settings_option_autoRecordOnAppOpen_title">打开 App 自动录制</string>
+    <string name="ui_settings_option_autoRecordOnAppOpen_description">每次打开 Alibi 时自动开始录制。（NFC触碰模式建议打开）</string>
+    <string name="ui_settings_option_autoStopSensor_title">姿态检测自动停止</string>
+    <string name="ui_settings_option_autoStopSensor_description">检测到手机从支架取下后自动停止录制。（使用方向传感器检测姿态变化）</string>
+    <string name="ui_settings_option_autoStopSensor_sensitivity">灵敏度</string>
+    <string name="ui_settings_option_autoStopSensor_sensitivity_strict">严格（30°）</string>
+    <string name="ui_settings_option_autoStopSensor_sensitivity_standard">标准（50°）</string>
+    <string name="ui_settings_option_autoStopSensor_sensitivity_relaxed">宽松（70°）</string>
+    <string name="ui_settings_option_autoStopSensor_screenOff">仅在屏幕关闭时触发</string>
+    <string name="ui_autoStop_warning_title">检测到手机姿态变化</string>
+    <string name="ui_autoStop_warning_message">5秒后自动停止录制，点击取消继续录制。</string>
+    <string name="ui_autoStop_warning_cancel">取消</string>
     <string name="ui_settings_option_saveFolder_title">片段文件夹</string>
     <string name="ui_settings_option_saveFolder_explanation">您希望 Alibi 将临时录制的片段文件存放在哪儿</string>
     <string name="ui_settings_option_saveFolder_action_select_label">选择</string>
@@ -132,10 +146,20 @@
     <string name="ui_settings_value_videoQuality_values_hd">高清</string>
     <string name="ui_settings_value_videoQuality_values_sd">标准</string>
     <string name="ui_settings_value_videoQuality_values_lowest">最低</string>
+    <string name="ui_settings_option_cameraLensTile_title">摄像头镜头</string>
+    <string name="ui_settings_value_cameraLens_auto">自动（优先超广角）</string>
+    <string name="ui_settings_value_cameraLens_ultrawide">超广角</string>
+    <string name="ui_settings_value_cameraLens_main">主摄像头</string>
+    <string name="ui_settings_value_cameraLens_front">前置摄像头</string>
+    <string name="ui_settings_option_videoAspectRatioTile_title">录制比例</string>
+    <string name="ui_settings_value_videoAspectRatio_4_3">4:3</string>
+    <string name="ui_settings_value_videoAspectRatio_16_9">16:9</string>
     <string name="ui_videoRecorder_action_start_label">开始录制视频</string>
     <string name="ui_videoRecorder_action_start_settings_enableAudio_label">同时录制音频</string>
     <string name="ui_videoRecorder_action_start_settings_cameraLens_back_label">后置摄像头</string>
     <string name="ui_videoRecorder_action_start_settings_cameraLens_front_label">前置摄像头</string>
+    <string name="ui_videoRecorder_action_start_settings_cameraLens_ultrawide_label">超广角</string>
+    <string name="ui_videoRecorder_action_start_settings_cameraLens_main_label">主摄像头</string>
     <string name="ui_videoRecorder_action_start_settings_cameraLens_external_label">外置摄像头</string>
     <string name="ui_videoRecorder_action_start_settings_cameraLens_label">摄像头%s</string>
     <string name="ui_videoRecorder_action_start_settings_start_label">开始录制</string>
@@ -219,4 +243,18 @@
     <string name="ui_settings_option_filenameFormat_success">新格式将用于未来的录音</string>
     <string name="ui_settings_option_filenameFormat_action_now_label">节省时间</string>
     <string name="ui_settings_option_filenameFormat_action_now_explanation">使用你保存录音的时间</string>
+
+    <!-- 更新检查 / Update check -->
+    <string name="ui_settings_option_checkUpdate_title">检查更新</string>
+    <string name="ui_settings_option_checkUpdate_description">当前：v%1$s\n点击检查新版本</string>
+    <string name="ui_update_dialog_title">发现新版本</string>
+    <string name="ui_update_dialog_message">版本：%1$s\n\n%2$s</string>
+    <string name="ui_update_dialog_download">下载</string>
+    <string name="ui_update_dialog_dismiss">忽略</string>
+    <string name="ui_update_snackbar_no_update">已经是最新版本</string>
+    <string name="ui_update_snackbar_check_failed">检查失败，请稍后重试</string>
+
+    <!-- 永久删除 / Permanently delete recordings -->
+    <string name="ui_settings_option_permanentlyDeleteRecordings_title">直接删除视频文件</string>
+    <string name="ui_settings_option_permanentlyDeleteRecordings_description">关闭时（默认）：自动删除的视频会进入系统回收站保留 30 天。长时间录制可能堆积大量已删除文件，占用存储空间。建议定期去相册回收站手动清理。\n\n开启后：视频直接永久删除，立即释放存储空间。\n\n适合长时间录制（如外卖配送）的用户。</string>
 </resources>

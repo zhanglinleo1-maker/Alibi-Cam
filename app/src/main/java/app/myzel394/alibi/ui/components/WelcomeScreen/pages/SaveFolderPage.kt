@@ -59,7 +59,7 @@ fun SaveFolderPage(
     onContinue: (saveFolder: String?) -> Unit,
     appSettings: AppSettings,
 ) {
-    var saveFolder by rememberSaveable { mutableStateOf<String?>(null) }
+    var saveFolder by rememberSaveable { mutableStateOf<String?>(RECORDER_MEDIA_SELECTED_VALUE) }
 
     val context = LocalContext.current
 
@@ -87,11 +87,8 @@ fun SaveFolderPage(
 
     LaunchedEffect(isLowOnStorage, appSettings.maxDuration) {
         if (isLowOnStorage) {
-            if (saveFolder == null) {
-                saveFolder = RECORDER_MEDIA_SELECTED_VALUE
-            }
-        } else {
-            saveFolder = null
+            // Force DCIM media when internal storage is too low
+            saveFolder = RECORDER_MEDIA_SELECTED_VALUE
         }
     }
 

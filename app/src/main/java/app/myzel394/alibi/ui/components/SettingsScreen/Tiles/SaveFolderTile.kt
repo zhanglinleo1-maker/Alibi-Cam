@@ -537,16 +537,6 @@ private fun SelectionSheet(
             )
 
             SelectionButton(
-                label = stringResource(R.string.ui_settings_option_saveFolder_action_default_label),
-                icon = Icons.Default.Lock,
-                onClick = {
-                    updateValue(null)
-                },
-            )
-
-            HorizontalDivider()
-
-            SelectionButton(
                 label = stringResource(R.string.ui_settings_option_saveFolder_action_dcim_label),
                 icon = Icons.Default.PermMedia,
                 onClick = {
@@ -561,6 +551,16 @@ private fun SelectionSheet(
                     } else {
                         showExternalPermissionRequired = true
                     }
+                },
+            )
+
+            HorizontalDivider()
+
+            SelectionButton(
+                label = stringResource(R.string.ui_settings_option_saveFolder_action_default_label),
+                icon = Icons.Default.Lock,
+                onClick = {
+                    updateValue(null)
                 },
             )
 

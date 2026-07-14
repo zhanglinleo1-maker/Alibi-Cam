@@ -14,10 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import app.myzel394.alibi.dataStore
 import app.myzel394.alibi.ui.components.WelcomeScreen.pages.ExplanationPage
-import app.myzel394.alibi.ui.components.WelcomeScreen.pages.MaxDurationSettingsPage
 import app.myzel394.alibi.ui.components.WelcomeScreen.pages.ReadyPage
 import app.myzel394.alibi.ui.components.WelcomeScreen.pages.ResponsibilityPage
-import app.myzel394.alibi.ui.components.WelcomeScreen.pages.SaveFolderPage
 import app.myzel394.alibi.ui.effects.rememberSettings
 import kotlinx.coroutines.launch
 
@@ -30,10 +28,11 @@ fun WelcomeScreen(
     val dataStore = context.dataStore
     val settings = rememberSettings()
     val scope = rememberCoroutineScope()
+    // 3 页引导：说明 → 责任声明 → 开始使用
     val pagerState = rememberPagerState(
         initialPage = 0,
         initialPageOffsetFraction = 0f,
-        pageCount = { 5 }
+        pageCount = { 3 }
     )
 
     fun finishTutorial() {
@@ -71,31 +70,7 @@ fun WelcomeScreen(
                         }
                     }
 
-                    2 -> MaxDurationSettingsPage {
-                        scope.launch {
-                            pagerState.animateScrollToPage(3)
-                        }
-                    }
-
-                    3 -> SaveFolderPage(
-                        onBack = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(2)
-                            }
-                        },
-                        onContinue = { saveFolder ->
-                            scope.launch {
-                                dataStore.updateData {
-                                    settings.setSaveFolder(saveFolder)
-                                }
-
-                                pagerState.animateScrollToPage(4)
-                            }
-                        },
-                        appSettings = settings
-                    )
-
-                    4 -> ReadyPage {
+                    2 -> ReadyPage {
                         finishTutorial()
                     }
                 }

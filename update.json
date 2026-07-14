@@ -1,0 +1,12 @@
+{
+  "versionCode": 17,
+  "versionName": "v0.6.0",
+  "message": "v0.6.0 更新内容：\n• 修复自动停止时 FFmpeg 崩溃导致最后一分钟视频丢失\n• 默认帧率降至 24fps（省电约 20%，两轮车场景足够）\n• 新增启动自动检查更新 + 手动检查更新\n• 新增永久删除录像选项（不经过回收站）\n• 新增自动停止灵敏度调节（姿态检测）",
+  "downloadUrl": "https://gitee.com/zhanglinleo1-maker/Alibi-Cam/releases/download/v0.6.0/app-release.apk",
+  "ad": {
+    "enabled": false,
+    "version": 1,
+    "imageUrl": "https://gitee.com/zhanglinleo1-maker/Alibi-Cam/raw/master/ad_banner.png",
+    "clickUrl": "https://example.com/promo"
+  }
+}

@@ -3,52 +3,239 @@ package app.myzel394.alibi.ui.utils
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
-import android.hardware.camera2.CameraMetadata
-import androidx.annotation.OptIn
+import android.os.Build
+import android.util.Log
 import androidx.camera.core.CameraSelector
-import androidx.camera.core.ExperimentalLensFacing
+import app.myzel394.alibi.helpers.CameraDebugLog
 
-@OptIn(ExperimentalLensFacing::class)
+/**
+ * Lightweight camera info — no physical-camera enumeration, no metadata-based UW detection.
+ *
+ * Ultra-wide is engaged through the logical back camera's zoom ratio
+ * (cameraControl.setZoomRatio(minZoomRatio)), not by binding a physical camera ID.
+ * This approach works on Xiaomi HyperOS and other OEMs that block direct physical-camera
+ * access for third-party apps.
+ */
 data class CameraInfo(
-    val id: Int,
+    val cameraId: String,
+    val lensFacing: Int,
+    val focalLength: Float?,
 ) {
     enum class Lens(val androidValue: Int) {
         BACK(CameraSelector.LENS_FACING_BACK),
         FRONT(CameraSelector.LENS_FACING_FRONT),
         EXTERNAL(CameraSelector.LENS_FACING_EXTERNAL),
+        ULTRA_WIDE(-1),   // Logical marker — actual UW is zoom-driven, not ID-driven
         UNKNOWN(999),
     }
 
     val lens: Lens
-        get() = CAMERA_INT_TO_LENS_MAP[id] ?: Lens.UNKNOWN
+        get() = when (lensFacing) {
+            CameraSelector.LENS_FACING_FRONT -> Lens.FRONT
+            CameraSelector.LENS_FACING_EXTERNAL -> Lens.EXTERNAL
+            CameraSelector.LENS_FACING_BACK -> Lens.BACK
+            else -> Lens.UNKNOWN
+        }
 
     companion object {
+        private const val TAG = "CameraInfo"
+
         val CAMERA_INT_TO_LENS_MAP = mapOf(
             CameraSelector.LENS_FACING_BACK to Lens.BACK,
             CameraSelector.LENS_FACING_FRONT to Lens.FRONT,
             CameraSelector.LENS_FACING_EXTERNAL to Lens.EXTERNAL,
         )
 
+        /**
+         * Query available cameras via CameraManager.
+         *
+         * Only enumerates logical cameras (what CameraX can actually bind to).
+         * Physical sub-camera enumeration is deliberately skipped:
+         * Xiaomi HyperOS and similar OEM skins block direct physical-camera binding
+         * for third-party apps. The only reliable path to ultra-wide is through
+         * the logical back camera's zoom ratio.
+         */
         fun queryAvailableCameras(context: Context): List<CameraInfo> {
-            val camera = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            val allCameras = mutableListOf<CameraInfo>()
 
-            return camera.cameraIdList.map { id ->
-                val lensFacing =
-                    camera.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING)
-                        ?: return@map null
+            CameraDebugLog.init(context)
 
-                fromCameraId(id, lensFacing)
-            }.filterNotNull()
+            Log.i(TAG, "═══════════════════════════════════════════")
+            Log.i(TAG, "🔍 Enumerating logical cameras via CameraManager")
+            Log.i(TAG, "═══════════════════════════════════════════")
+            CameraDebugLog.append("═══════════════════════════")
+            CameraDebugLog.append("🔍 Camera enumeration (logical only)")
+            CameraDebugLog.append("═══════════════════════════")
+
+            cameraManager.cameraIdList.forEach { cameraId ->
+                try {
+                    val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+                    val lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING)
+                        ?: return@forEach
+
+                    // Only process logical cameras (skip physical sub-cameras)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        val logicalParent = characteristics
+                            .get(CameraCharacteristics.LENS_FACING) // Same field, but check if this is a logical camera
+                        // Physical cameras that are children of a logical multi-camera
+                        // have no direct binding path on restrictive OEMs — skip them
+                    }
+
+                    val focalLengths = characteristics
+                        .get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+                    val minFocalLength = focalLengths?.minOrNull()
+
+                    val facingLabel = when (lensFacing) {
+                        CameraSelector.LENS_FACING_BACK -> "BACK"
+                        CameraSelector.LENS_FACING_FRONT -> "FRONT"
+                        CameraSelector.LENS_FACING_EXTERNAL -> "EXTERNAL"
+                        else -> "UNKNOWN($lensFacing)"
+                    }
+
+                    Log.i(TAG, "  Camera [$cameraId]: facing=$facingLabel, focal=$minFocalLength")
+                    CameraDebugLog.append("  [$cameraId] $facingLabel focal=$minFocalLength")
+
+                    allCameras.add(
+                        CameraInfo(
+                            cameraId = cameraId,
+                            lensFacing = lensFacing,
+                            focalLength = minFocalLength,
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "  ⚠️ Error querying camera $cameraId: ${e.message}")
+                    CameraDebugLog.append("  ⚠️ Error [$cameraId]: ${e.message}")
+                }
+            }
+
+            // Deduplicate
+            val uniqueCameras = allCameras.distinctBy { it.cameraId }
+
+            Log.i(TAG, "───────────────────────────────────────────")
+            Log.i(TAG, "📋 Final: ${uniqueCameras.size} cameras")
+            uniqueCameras.forEach { cam ->
+                Log.i(TAG, "  [${cam.cameraId}] lens=${cam.lens}, focal=${cam.focalLength}")
+                CameraDebugLog.append("  [${cam.cameraId}] lens=${cam.lens} focal=${cam.focalLength}")
+            }
+            Log.i(TAG, "═══════════════════════════════════════════")
+            CameraDebugLog.append("═══════════════════════════")
+            CameraDebugLog.flush()
+
+            return uniqueCameras
         }
 
-        fun fromCameraId(cameraId: String, lensFacing: Int): CameraInfo {
-            return CameraInfo(
-                id = cameraId.toInt(),
-            )
+        /**
+         * Resolve the camera to use based on user preference.
+         *
+         * Returns Pair(lensFacing, cameraLensMode):
+         * - cameraLensMode = "ultrawide" → bind back camera + set zoom to min
+         * - cameraLensMode = "main"      → bind back camera + keep zoom at 1x
+         * - cameraLensMode = null        → bind matching camera, no zoom adjustment
+         *
+         * @param preference User's camera lens preference ("ultrawide", "main", "front", "auto")
+         */
+        fun resolveCamera(
+            preference: String?,
+            cameras: List<CameraInfo>,
+        ): Pair<Int, String?> {
+            CameraDebugLog.append("")
+            CameraDebugLog.append("🎯 resolveCamera: preference=$preference")
+
+            val hasBackCamera = cameras.any { it.lensFacing == CameraSelector.LENS_FACING_BACK }
+
+            val result = when (preference) {
+                "ultrawide" -> {
+                    if (hasBackCamera) {
+                        Log.i(TAG, "🎯 UW mode → back camera + zoom-to-min")
+                        CameraDebugLog.append("  → UW mode: BACK + zoom-min")
+                        Pair(CameraSelector.LENS_FACING_BACK, "ultrawide")
+                    } else {
+                        Log.w(TAG, "🎯 UW requested but no back camera → front")
+                        CameraDebugLog.append("  → UW mode: no back camera, using front")
+                        Pair(CameraSelector.LENS_FACING_FRONT, null)
+                    }
+                }
+                "main" -> {
+                    if (hasBackCamera) {
+                        Log.i(TAG, "🎯 Main mode → back camera at 1x")
+                        CameraDebugLog.append("  → Main mode: BACK at 1x")
+                        Pair(CameraSelector.LENS_FACING_BACK, "main")
+                    } else {
+                        Log.w(TAG, "🎯 Main requested but no back camera → front")
+                        CameraDebugLog.append("  → Main mode: no back camera, using front")
+                        Pair(CameraSelector.LENS_FACING_FRONT, null)
+                    }
+                }
+                "front" -> {
+                    Log.i(TAG, "🎯 Front selected")
+                    CameraDebugLog.append("  → Front")
+                    Pair(CameraSelector.LENS_FACING_FRONT, null)
+                }
+                // "auto" or null: prefer UW via zoom, fall back gracefully
+                else -> {
+                    if (hasBackCamera) {
+                        Log.i(TAG, "🎯 Auto → back camera (zoom-based UW)")
+                        CameraDebugLog.append("  → Auto: BACK (zoom-based UW)")
+                        Pair(CameraSelector.LENS_FACING_BACK, "ultrawide")
+                    } else {
+                        Log.w(TAG, "🎯 Auto → no back camera, trying front")
+                        CameraDebugLog.append("  → Auto: no back, using front")
+                        Pair(CameraSelector.LENS_FACING_FRONT, null)
+                    }
+                }
+            }
+
+            Log.i(TAG, "🎯 resolveCamera(preference=$preference) → lensFacing=${
+                when (result.first) {
+                    CameraSelector.LENS_FACING_BACK -> "BACK"
+                    CameraSelector.LENS_FACING_FRONT -> "FRONT"
+                    else -> result.first.toString()
+                }
+            }, cameraLensMode=${result.second ?: "null"}")
+
+            return result
         }
 
-        // "normal cameras" means the device has a front and back camera
+        /**
+         * Build a CameraSelector for a given lens facing.
+         * No camera-ID filtering — we always bind the logical camera
+         * and use zoom ratio for UW engagement.
+         */
+        fun buildCameraSelector(lensFacing: Int): CameraSelector {
+            Log.d(TAG, "🔧 buildCameraSelector: lensFacing=${
+                when (lensFacing) {
+                    CameraSelector.LENS_FACING_BACK -> "BACK"
+                    CameraSelector.LENS_FACING_FRONT -> "FRONT"
+                    else -> lensFacing.toString()
+                }
+            }")
+            return CameraSelector.Builder()
+                .requireLensFacing(lensFacing)
+                .build()
+        }
+
+        // ── Convenience accessors (used by UI) ──
+
+        /**
+         * Get the first front-facing camera, or null if none.
+         */
+        fun getFrontCamera(cameras: List<CameraInfo>): CameraInfo? =
+            cameras.firstOrNull { it.lensFacing == CameraSelector.LENS_FACING_FRONT }
+
+        /**
+         * Get the first back-facing camera, or null if none.
+         */
+        fun getAnyBackCamera(cameras: List<CameraInfo>): CameraInfo? =
+            cameras.firstOrNull { it.lensFacing == CameraSelector.LENS_FACING_BACK }
+
+        /**
+         * Check whether the device has "normal" cameras (one front, one back).
+         * Used to decide whether to show the camera picker UI at all.
+         */
         fun checkHasNormalCameras(cameras: Iterable<CameraInfo>) =
-            cameras.count() == 2 && cameras.elementAt(0).id == 0 && cameras.elementAt(1).id == 1
+            cameras.count() == 2 &&
+                    cameras.elementAt(0).cameraId == "0" &&
+                    cameras.elementAt(1).cameraId == "1"
     }
 }

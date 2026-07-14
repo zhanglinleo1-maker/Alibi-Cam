@@ -32,14 +32,45 @@ data class AppSettings(
     val filenameFormat: FilenameFormat = FilenameFormat.DATETIME_RELATIVE_START,
 
     /// Recording information
-    // 30 minutes
-    val maxDuration: Long = 15 * 60 * 1000L,
-    // 60 seconds
-    val intervalDuration: Long = 60 * 1000L,
+    // 30 minutes（最大录制时长）
+    val maxDuration: Long = 30 * 60 * 1000L,
+    // 5 minutes（分段文件间隔）
+    val intervalDuration: Long = 5 * 60 * 1000L,
 
     val notificationSettings: NotificationSettings? = null,
     val deleteRecordingsImmediately: Boolean = false,
-    val saveFolder: String? = null,
+    val saveFolder: String? = RECORDER_MEDIA_SELECTED_VALUE,
+    // Auto-start recording whenever Alibi is opened，默认关闭（首次启动需手动授权权限）
+    val autoRecordOnAppOpen: Boolean = false,
+    // ── 传感器自动停止录制 ──
+    // 姿态检测自动停止，默认开启
+    val autoStopSensorEnabled: Boolean = true,
+    // 重力倾斜灵敏度：strict=30° / standard=50° / relaxed=70°，默认 standard
+    val autoStopSensitivity: String = "standard",
+    // Only trigger auto-stop when the screen is off (double confirmation)，默认关闭
+    val autoStopRequireScreenOff: Boolean = false,
+    // 设备首次安装唯一标识（用于统计安装量）
+    val installId: String? = null,
+    // ── 更新检查 ──
+    // 用户已忽略的更新版本号；为 0 表示从未忽略过任何版本
+    val dismissedUpdateVersionCode: Int = 0,
+    // 上次检查更新的时间戳（毫秒），用于每天最多检查一次
+    val lastUpdateCheckTime: Long = 0,
+    // ── 广告配置（远程开关）──
+    // 是否展示广告（由 update.json 远程控制，默认 false）
+    val adEnabled: Boolean = false,
+    // 用户已关闭的广告版本号；为 0 表示从未关闭过；>= 当前广告版本则不再显示
+    val adDismissedVersion: Int = 0,
+    // 广告图片 URL（从远程配置同步）
+    val adImageUrl: String = "",
+    // 广告点击跳转 URL（从远程配置同步）
+    val adClickUrl: String = "",
+    // 当前远程广告版本号
+    val adVersion: Int = 0,
+    // ── 永久删除视频文件（不进系统回收站）──
+    // 默认 false，保持 Android 原生行为（部分厂商会拦截删除进回收站）
+    // 开启后直接物理删除，立刻释放存储空间，适合长时间录制用户（如外卖配送）
+    val permanentlyDeleteRecordings: Boolean = false,
 ) {
     fun setShowAdvancedSettings(showAdvancedSettings: Boolean): AppSettings {
         return copy(showAdvancedSettings = showAdvancedSettings)
@@ -105,6 +136,56 @@ data class AppSettings(
         return copy(saveFolder = saveFolder)
     }
 
+    fun setAutoRecordOnAppOpen(enabled: Boolean): AppSettings {
+        return copy(autoRecordOnAppOpen = enabled)
+    }
+
+    fun setAutoStopSensorEnabled(enabled: Boolean): AppSettings {
+        return copy(autoStopSensorEnabled = enabled)
+    }
+
+    fun setAutoStopSensitivity(sensitivity: String): AppSettings {
+        return copy(autoStopSensitivity = sensitivity)
+    }
+
+    fun setAutoStopRequireScreenOff(require: Boolean): AppSettings {
+        return copy(autoStopRequireScreenOff = require)
+    }
+
+    fun setInstallId(id: String): AppSettings {
+        return copy(installId = id)
+    }
+
+    fun setDismissedUpdateVersionCode(code: Int): AppSettings {
+        return copy(dismissedUpdateVersionCode = code)
+    }
+
+    fun setLastUpdateCheckTime(time: Long): AppSettings {
+        return copy(lastUpdateCheckTime = time)
+    }
+
+    fun setAdConfig(
+        enabled: Boolean,
+        version: Int,
+        imageUrl: String,
+        clickUrl: String,
+    ): AppSettings {
+        return copy(
+            adEnabled = enabled,
+            adVersion = version,
+            adImageUrl = imageUrl,
+            adClickUrl = clickUrl,
+        )
+    }
+
+    fun setAdDismissedVersion(version: Int): AppSettings {
+        return copy(adDismissedVersion = version)
+    }
+
+    fun setPermanentlyDeleteRecordings(enabled: Boolean): AppSettings {
+        return copy(permanentlyDeleteRecordings = enabled)
+    }
+
     fun setAppLockSettings(appLockSettings: AppLockSettings?): AppSettings {
         return copy(appLockSettings = appLockSettings)
     }
@@ -168,6 +249,9 @@ data class RecordingInformation(
     val intervalDuration: Long,
     val fileExtension: String,
     val type: Type,
+    // Flat storage: identifies which session's chunks belong to this recording.
+    // Used by VideoBatchesFolder.getBatchesForFFmpeg() to filter chunks during export.
+    val sessionId: String? = null,
 ) {
     fun hasRecordingsAvailable(context: Context): Boolean =
         when (type) {
@@ -447,9 +531,14 @@ data class AudioRecorderSettings(
 
 @Serializable
 data class VideoRecorderSettings(
-    val targetedVideoBitRate: Int? = null,
-    val quality: String? = null,
-    val targetFrameRate: Int? = null,
+    val targetedVideoBitRate: Int? = 2_000_000,     // 默认 2 Mbps（行车记录仪甜点码率）
+    val quality: String? = "FHD",                   // 默认 FHD（1920×1080）
+    val targetFrameRate: Int? = 24,                 // 默认 24 fps（省电 20%，两轮车场景够用）
+    // Camera lens preference: null/"auto" (prefer ultra-wide, fallback to main),
+    // "ultrawide", "main", "front"
+    val cameraLens: String? = null,
+    // Video aspect ratio: null or "4:3" = 4:3 (default), "16:9" = 16:9
+    val videoAspectRatio: String? = null,
 ) {
     fun setTargetedVideoBitRate(bitRate: Int?): VideoRecorderSettings {
         return copy(targetedVideoBitRate = bitRate)
@@ -463,6 +552,14 @@ data class VideoRecorderSettings(
 
     fun setTargetFrameRate(frameRate: Int?): VideoRecorderSettings {
         return copy(targetFrameRate = frameRate)
+    }
+
+    fun setCameraLens(cameraLens: String?): VideoRecorderSettings {
+        return copy(cameraLens = cameraLens)
+    }
+
+    fun setVideoAspectRatio(aspectRatio: String?): VideoRecorderSettings {
+        return copy(videoAspectRatio = aspectRatio)
     }
 
     fun getQuality(): Quality? =

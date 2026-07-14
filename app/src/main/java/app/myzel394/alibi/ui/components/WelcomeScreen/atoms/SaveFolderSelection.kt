@@ -67,39 +67,6 @@ fun SaveFolderSelection(
             verticalArrangement = Arrangement.Center,
         ) {
             let {
-                val label = stringResource(R.string.ui_welcome_saveFolder_values_internal)
-                val a11yLabel = stringResource(
-                    R.string.a11y_selectValue,
-                    label
-                )
-                val folder = null
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = createModifier(a11yLabel) {
-                        onSaveFolderChange(folder)
-                    },
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        RadioButton(
-                            selected = saveFolder == folder,
-                            onClick = { onSaveFolderChange(folder) },
-                        )
-                        Text(label)
-                    }
-                    Icon(
-                        Icons.Default.Lock,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(ButtonDefaults.IconSize)
-                    )
-                }
-            }
-            let {
                 val label = stringResource(R.string.ui_welcome_saveFolder_values_media)
                 val a11yLabel = stringResource(
                     R.string.a11y_selectValue,
@@ -126,6 +93,39 @@ fun SaveFolderSelection(
                     }
                     Icon(
                         Icons.Default.PermMedia,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(ButtonDefaults.IconSize)
+                    )
+                }
+            }
+            let {
+                val label = stringResource(R.string.ui_welcome_saveFolder_values_internal)
+                val a11yLabel = stringResource(
+                    R.string.a11y_selectValue,
+                    label
+                )
+                val folder = null
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = createModifier(a11yLabel) {
+                        onSaveFolderChange(folder)
+                    },
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        RadioButton(
+                            selected = saveFolder == folder,
+                            onClick = { onSaveFolderChange(folder) },
+                        )
+                        Text(label)
+                    }
+                    Icon(
+                        Icons.Default.Lock,
                         contentDescription = null,
                         modifier = Modifier
                             .size(ButtonDefaults.IconSize)

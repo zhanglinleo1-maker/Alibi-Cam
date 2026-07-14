@@ -9,7 +9,6 @@ import java.util.concurrent.TimeUnit
 abstract class IntervalRecorderService<I, B : BatchesFolder> :
     RecorderService() {
     protected var counter = 0L
-        private set
 
     // Tracks the index of the currently locked file
     private var lockedIndex: Long? = null
@@ -88,11 +87,13 @@ abstract class IntervalRecorderService<I, B : BatchesFolder> :
         super.stop()
     }
 
-    fun clearAllRecordings() {
-        batchesFolder.deleteRecordings()
-    }
+    // clearAllRecordings() removed — each startNewCycle session should NOT wipe
+    // prior recordings. Rolling-window pruning is handled by deleteOldRecordings().
 
-    private fun deleteOldRecordings() {
+    protected open fun deleteOldRecordings() {
+        // 同步永久删除标志到 BatchesFolder
+        batchesFolder.permanentlyDeleteRecordings = settings.permanentlyDeleteRecordings
+
         val timeMultiplier = settings.maxDuration / settings.intervalDuration
         val earliestCounter = Math.max(counter - timeMultiplier, lockedIndex ?: 0)
 

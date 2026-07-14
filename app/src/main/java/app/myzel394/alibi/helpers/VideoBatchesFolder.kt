@@ -1,5 +1,6 @@
 package app.myzel394.alibi.helpers
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
@@ -8,6 +9,7 @@ import android.os.Environment
 import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
+import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import app.myzel394.alibi.helpers.MediaConverter.Companion.concatenateVideoFiles
 import app.myzel394.alibi.ui.MEDIA_SUBFOLDER_NAME
@@ -38,6 +40,17 @@ class VideoBatchesFolder(
     )
 
     private var customParcelFileDescriptor: ParcelFileDescriptor? = null
+
+    /**
+     * Session ID for flat storage mode. When set, chunks are stored directly in
+     * the base folder (no task subfolder) with names like:
+     *   alibi-video_recordings-{sessionId}-{counter}.mp4
+     *
+     * This replaces the older per-session subfolder approach. Setting this to
+     * non-null also scopes [getBatchesForFFmpeg] to only return chunks from
+     * this session.
+     */
+    var sessionId: String? = null
 
     override fun getOutputFileForFFmpeg(
         date: LocalDateTime,
@@ -90,6 +103,318 @@ class VideoBatchesFolder(
         }
     }
 
+    // ── Task-folder scanning overrides for MEDIA / CUSTOM ─────────────────
+
+    override fun listTaskFolderNames(): List<String> {
+        return when (type) {
+            BatchType.INTERNAL -> super.listTaskFolderNames()
+            BatchType.CUSTOM -> {
+                getCustomDefinedFolder().listFiles()
+                    .filter { it.isDirectory && it.name?.toLongOrNull() != null }
+                    .map { it.name!! }
+                    .sorted()
+            }
+            BatchType.MEDIA -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val folders = mutableListOf<String>()
+                    // Query all video files under our scoped directory to discover task subfolders
+                    context.contentResolver.query(
+                        scopedMediaContentUri,
+                        arrayOf(MediaStore.Video.Media.RELATIVE_PATH),
+                        "${MediaStore.Video.Media.RELATIVE_PATH} LIKE ?",
+                        arrayOf("$SCOPED_STORAGE_RELATIVE_PATH/%"),
+                        null,
+                    )?.use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val path = cursor.getString(0)
+                            // Extract task folder name: DCIM/alibi/.video_recordings/20260703174830 → 20260703174830
+                            val subPath = path.removePrefix("$SCOPED_STORAGE_RELATIVE_PATH/")
+                            val folderName = subPath.substringBefore("/")
+                            if (folderName.toLongOrNull() != null && folderName !in folders) {
+                                folders.add(folderName)
+                            }
+                        }
+                    }
+                    folders.sorted()
+                } else {
+                    legacyMediaFolder.listFiles()
+                        ?.filter { it.isDirectory && it.name?.toLongOrNull() != null }
+                        ?.map { it.name!! }
+                        ?.sorted()
+                        ?: emptyList()
+                }
+            }
+        }
+    }
+
+    override fun listChunksInTaskFolder(taskFolderName: String): List<String> {
+        return when (type) {
+            BatchType.INTERNAL -> super.listChunksInTaskFolder(taskFolderName)
+            BatchType.CUSTOM -> {
+                val taskDir = getCustomDefinedFolder().findFile(taskFolderName) ?: return emptyList()
+                taskDir.listFiles()
+                    .filter { it.isFile && it.name?.substringBeforeLast(".")?.toIntOrNull() != null }
+                    .map { it.name!! }
+                    .sorted()
+            }
+            BatchType.MEDIA -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val chunks = mutableListOf<String>()
+                    val relPath = "$SCOPED_STORAGE_RELATIVE_PATH/$taskFolderName"
+                    context.contentResolver.query(
+                        scopedMediaContentUri,
+                        arrayOf(MediaStore.Video.Media.DISPLAY_NAME),
+                        "${MediaStore.Video.Media.RELATIVE_PATH} = ?",
+                        arrayOf(relPath),
+                        null,
+                    )?.use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val name = cursor.getString(0) ?: continue
+                            if (name.substringBeforeLast(".").toIntOrNull() != null) {
+                                chunks.add(name)
+                            }
+                        }
+                    }
+                    chunks.sorted()
+                } else {
+                    File(legacyMediaFolder, taskFolderName).listFiles()
+                        ?.filter { it.isFile && it.nameWithoutExtension.toIntOrNull() != null }
+                        ?.map { it.name!! }
+                        ?.sorted()
+                        ?: emptyList()
+                }
+            }
+        }
+    }
+
+    override fun deleteChunk(taskFolderName: String, chunkName: String): Boolean {
+        return when (type) {
+            BatchType.INTERNAL -> super.deleteChunk(taskFolderName, chunkName)
+            BatchType.CUSTOM -> {
+                val taskDir = getCustomDefinedFolder().findFile(taskFolderName) ?: return false
+                val file = taskDir.findFile(chunkName) ?: return false
+                file.delete()
+            }
+            BatchType.MEDIA -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val relPath = "$SCOPED_STORAGE_RELATIVE_PATH/$taskFolderName"
+                    val deleted = context.contentResolver.delete(
+                        scopedMediaContentUri,
+                        "${MediaStore.Video.Media.RELATIVE_PATH} = ? AND ${MediaStore.Video.Media.DISPLAY_NAME} = ?",
+                        arrayOf(relPath, chunkName),
+                    )
+                    deleted > 0
+                } else {
+                    File(legacyMediaFolder, "$taskFolderName/$chunkName").delete()
+                }
+            }
+        }
+    }
+
+    override fun deleteTaskFolderIfEmpty(taskFolderName: String): Boolean {
+        return when (type) {
+            BatchType.INTERNAL -> super.deleteTaskFolderIfEmpty(taskFolderName)
+            BatchType.CUSTOM -> {
+                val taskDir = getCustomDefinedFolder().findFile(taskFolderName) ?: return true
+                if (taskDir.listFiles().isEmpty()) { taskDir.delete() } else false
+            }
+            BatchType.MEDIA -> {
+                // Check if any chunks remain in the task folder
+                val remaining = listChunksInTaskFolder(taskFolderName)
+                if (remaining.isEmpty()) {
+                    // Nothing to delete — MediaStore removes the virtual folder when empty
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    // ── Flat storage (no task subfolders) ──────────────────────────────────
+    // When sessionId is set, chunks are stored directly in the base folder
+    // with names like: alibi-video_recordings-{sessionId}-{counter}.mp4
+    // This avoids RELATIVE_PATH-based MediaStore queries, which are unreliable
+    // on some OEM firmware (e.g. Xiaomi HyperOS).
+
+    /**
+     * Lists ALL chunk display names across all sessions, sorted
+     * lexicographically (= chronologically for timestamp-based names).
+     */
+    fun listFlatChunkNames(): List<String> {
+        return when (type) {
+            BatchType.INTERNAL -> {
+                getInternalFolder().listFiles()
+                    ?.filter { it.isFile && it.name?.startsWith(mediaPrefix) == true }
+                    ?.map { it.name!! }
+                    ?.sorted()
+                    ?: emptyList()
+            }
+            BatchType.CUSTOM -> {
+                getCustomDefinedFolder().listFiles()
+                    .filter { it.isFile && it.name?.startsWith(mediaPrefix) == true }
+                    .map { it.name!! }
+                    .sorted()
+            }
+            BatchType.MEDIA -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val names = mutableListOf<String>()
+                    context.contentResolver.query(
+                        scopedMediaContentUri,
+                        arrayOf(MediaStore.Video.Media.DISPLAY_NAME),
+                        "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?",
+                        arrayOf("$mediaPrefix%"),
+                        null,
+                    )?.use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val name = cursor.getString(0) ?: continue
+                            if (name.startsWith(mediaPrefix)) {
+                                names.add(name)
+                            }
+                        }
+                    }
+                    names.sorted()
+                } else {
+                    legacyMediaFolder.listFiles()
+                        ?.filter { it.isFile && it.name?.startsWith(mediaPrefix) == true }
+                        ?.map { it.name!! }
+                        ?.sorted()
+                        ?: emptyList()
+                }
+            }
+        }
+    }
+
+    /**
+     * Deletes a single chunk by its display name (flat storage).
+     */
+    fun deleteFlatChunk(name: String): Boolean {
+        return when (type) {
+            BatchType.INTERNAL -> File(getInternalFolder(), name).delete()
+            BatchType.CUSTOM -> {
+                val file = getCustomDefinedFolder().findFile(name) ?: return false
+                file.delete()
+            }
+            BatchType.MEDIA -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val deleted = context.contentResolver.delete(
+                        scopedMediaContentUri,
+                        "${MediaStore.Video.Media.DISPLAY_NAME} = ?",
+                        arrayOf(name),
+                    )
+                    deleted > 0
+                } else {
+                    File(legacyMediaFolder, name).delete()
+                }
+            }
+        }
+    }
+
+    /**
+     * Lists chunk display names for the current session only.
+     * Requires [sessionId] to be set; returns empty list otherwise.
+     */
+    fun listSessionChunkNames(): List<String> {
+        val sid = sessionId ?: return emptyList()
+        val prefix = "${mediaPrefix}${sid}-"
+        return when (type) {
+            BatchType.INTERNAL -> {
+                getInternalFolder().listFiles()
+                    ?.filter { it.isFile && it.name?.startsWith(prefix) == true }
+                    ?.map { it.name!! }
+                    ?.sorted()
+                    ?: emptyList()
+            }
+            BatchType.CUSTOM -> {
+                getCustomDefinedFolder().listFiles()
+                    .filter { it.isFile && it.name?.startsWith(prefix) == true }
+                    .map { it.name!! }
+                    .sorted()
+            }
+            BatchType.MEDIA -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val names = mutableListOf<String>()
+                    context.contentResolver.query(
+                        scopedMediaContentUri,
+                        arrayOf(MediaStore.Video.Media.DISPLAY_NAME),
+                        "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?",
+                        arrayOf("$prefix%"),
+                        null,
+                    )?.use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val name = cursor.getString(0) ?: continue
+                            if (name.startsWith(prefix)) names.add(name)
+                        }
+                    }
+                    names.sorted()
+                } else {
+                    legacyMediaFolder.listFiles()
+                        ?.filter { it.isFile && it.name?.startsWith(prefix) == true }
+                        ?.map { it.name!! }
+                        ?.sorted()
+                        ?: emptyList()
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns FFmpeg-compatible file paths for chunks belonging to the current
+     * session (when [sessionId] is set) or all chunks (fallback).
+     */
+    override fun getBatchesForFFmpeg(): List<String> {
+        val names = if (sessionId != null) {
+            listSessionChunkNames()
+        } else {
+            // Fallback: use the old task-folder-based approach
+            return super.getBatchesForFFmpeg()
+        }
+
+        if (names.isEmpty()) return emptyList()
+
+        return when (type) {
+            BatchType.INTERNAL -> {
+                names.map { File(getInternalFolder(), it).absolutePath }
+            }
+            BatchType.CUSTOM -> {
+                names.mapNotNull { name ->
+                    val file = getCustomDefinedFolder().findFile(name) ?: return@mapNotNull null
+                    FFmpegKitConfig.getSafParameterForRead(context, file.uri)
+                }
+            }
+            BatchType.MEDIA -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val uris = mutableListOf<Uri>()
+                    val prefix = "${mediaPrefix}${sessionId}-"
+                    context.contentResolver.query(
+                        scopedMediaContentUri,
+                        arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.DISPLAY_NAME),
+                        "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?",
+                        arrayOf("$prefix%"),
+                        null,
+                    )?.use { cursor ->
+                        val nameIdx = cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME)
+                        val idIdx = cursor.getColumnIndex(MediaStore.Video.Media._ID)
+                        while (cursor.moveToNext()) {
+                            if (cursor.getString(nameIdx) == null) continue
+                            val id = cursor.getLong(idIdx)
+                            uris.add(ContentUris.withAppendedId(scopedMediaContentUri, id))
+                        }
+                    }
+                    uris.sortedBy { it.toString() }
+                        .map { uri -> FFmpegKitConfig.getSafParameterForRead(context, uri)!! }
+                } else {
+                    names.map { name ->
+                        FFmpegKitConfig.getSafParameterForRead(
+                            context,
+                            File(legacyMediaFolder, name).toUri(),
+                        )!!
+                    }
+                }
+            }
+        }
+    }
+
     fun asCustomGetParcelFileDescriptor(
         counter: Long,
         fileExtension: String,
@@ -98,11 +423,21 @@ class VideoBatchesFolder(
             customParcelFileDescriptor?.close()
         }
 
-        val file =
-            getCustomDefinedFolder().createFile(
-                "video/$fileExtension",
-                "$counter.$fileExtension"
-            )!!
+        val parentFolder = if (taskFolderName != null) {
+            var f = getCustomDefinedFolder().findFile(taskFolderName!!)
+            if (f == null) f = getCustomDefinedFolder().createDirectory(taskFolderName!!)
+            f!!
+        } else {
+            getCustomDefinedFolder()
+        }
+
+        val fileName = if (taskFolderName != null) {
+            "%03d.%s".format(counter, fileExtension)
+        } else {
+            "$counter.$fileExtension"
+        }
+
+        val file = parentFolder.createFile("video/$fileExtension", fileName)!!
         val resolver = context.contentResolver.acquireContentProviderClient(file.uri)!!
 
         resolver.use {
@@ -120,7 +455,8 @@ class VideoBatchesFolder(
         )
         put(
             MediaStore.Video.Media.RELATIVE_PATH,
-            SCOPED_STORAGE_RELATIVE_PATH,
+            if (taskFolderName != null) "$SCOPED_STORAGE_RELATIVE_PATH/$taskFolderName"
+            else SCOPED_STORAGE_RELATIVE_PATH,
         )
 
         put(

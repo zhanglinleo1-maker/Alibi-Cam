@@ -1,5 +1,6 @@
 package app.myzel394.alibi.ui.components.RecorderScreen.molecules
 
+import android.util.Log
 import CameraSelectionButton
 import androidx.annotation.OptIn
 import androidx.camera.core.CameraSelector
@@ -16,44 +17,72 @@ fun CamerasSelection(
     cameras: Iterable<CameraInfo>,
     videoSettings: VideoRecorderModel,
 ) {
-    val CAMERA_LENS_TEXT_MAP = mapOf(
-        CameraInfo.Lens.BACK to stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_back_label),
-        CameraInfo.Lens.FRONT to stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_front_label),
-        CameraInfo.Lens.EXTERNAL to stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_external_label),
-        CameraInfo.Lens.UNKNOWN to stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_unknown_label),
-    )
+    val hasBackCamera = CameraInfo.getAnyBackCamera(cameras.toList()) != null
+    val frontCamera = CameraInfo.getFrontCamera(cameras.toList())
+
+    // Selection state based on cameraLensMode (zoom-driven, not camera-ID-driven)
+    val isUWSelected = videoSettings.cameraID == CameraSelector.LENS_FACING_BACK &&
+            videoSettings.cameraLensMode == "ultrawide"
+    val isMainSelected = videoSettings.cameraID == CameraSelector.LENS_FACING_BACK &&
+            videoSettings.cameraLensMode != "ultrawide"
+    val isFrontSelected = videoSettings.cameraID == CameraSelector.LENS_FACING_FRONT
 
     Column {
-        if (CameraInfo.checkHasNormalCameras(cameras)) {
+        // Ultra-wide option — always shown when a back camera exists.
+        // UW is engaged via zoom ratio on the logical camera at bind time,
+        // not by binding a physical camera ID. If the device lacks UW hardware,
+        // zoom stays at 1x and it behaves identically to the main camera.
+        if (hasBackCamera) {
             CameraSelectionButton(
-                cameraID = CameraInfo.Lens.BACK,
-                label = stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_back_label),
-                selected = videoSettings.cameraID == CameraInfo.Lens.BACK.androidValue,
+                cameraID = CameraInfo.Lens.ULTRA_WIDE,
+                label = stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_ultrawide_label),
+                selected = isUWSelected,
                 onSelected = {
-                    videoSettings.cameraID = CameraInfo.Lens.BACK.androidValue
+                    videoSettings.cameraID = CameraSelector.LENS_FACING_BACK
+                    videoSettings.cameraLensMode = "ultrawide"
                 },
             )
+        }
+
+        // Main back camera option
+        if (hasBackCamera) {
+            CameraSelectionButton(
+                cameraID = CameraInfo.Lens.BACK,
+                label = stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_main_label),
+                selected = isMainSelected,
+                onSelected = {
+                    videoSettings.cameraID = CameraSelector.LENS_FACING_BACK
+                    videoSettings.cameraLensMode = "main"
+                },
+            )
+        }
+
+        // Front camera option
+        if (frontCamera != null) {
             CameraSelectionButton(
                 cameraID = CameraInfo.Lens.FRONT,
                 label = stringResource(R.string.ui_videoRecorder_action_start_settings_cameraLens_front_label),
-                selected = videoSettings.cameraID == CameraInfo.Lens.FRONT.androidValue,
+                selected = isFrontSelected,
                 onSelected = {
-                    videoSettings.cameraID = CameraInfo.Lens.FRONT.androidValue
+                    videoSettings.cameraID = CameraSelector.LENS_FACING_FRONT
+                    videoSettings.cameraLensMode = null
                 },
             )
-        } else {
-            cameras.forEach { camera ->
+        }
+
+        // External cameras (if any)
+        cameras.forEach { camera ->
+            if (camera.lensFacing == CameraSelector.LENS_FACING_EXTERNAL) {
                 CameraSelectionButton(
                     cameraID = camera.lens,
-                    selected = videoSettings.cameraID == camera.id,
+                    selected = videoSettings.cameraID == CameraSelector.LENS_FACING_EXTERNAL,
                     onSelected = {
-                        videoSettings.cameraID = camera.id
+                        videoSettings.cameraID = CameraSelector.LENS_FACING_EXTERNAL
+                        videoSettings.cameraLensMode = null
                     },
                     label = stringResource(
-                        R.string.ui_videoRecorder_action_start_settings_cameraLens_label,
-                        camera.id
+                        R.string.ui_videoRecorder_action_start_settings_cameraLens_external_label
                     ),
-                    description = CAMERA_LENS_TEXT_MAP[camera.lens]!!,
                 )
             }
         }

@@ -54,7 +54,8 @@ class AudioRecorderModel :
         // so we only want to actually start the recording if the service is idle and thus
         // not already recording
         if (service.state == RecorderState.IDLE) {
-            service.clearAllRecordings()
+            // Do NOT wipe prior recordings — rolling-window pruning
+            // (deleteOldRecordings) handles storage limits across sessions.
             service.startRecording()
             onRecordingStart()
         }

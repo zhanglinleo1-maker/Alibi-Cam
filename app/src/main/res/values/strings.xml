@@ -1,5 +1,5 @@
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="app_name">Alibi</string>
+    <string name="app_name">Alibi Cam</string>
 
     <string name="dialog_close_cancel_label">Cancel</string>
     <string name="dialog_close_neutral_label">OK</string>
@@ -29,7 +29,8 @@
     <string name="ui_recorder_action_delete_confirm_message">Are you sure you want to delete this recording?</string>
     <string name="ui_recorder_action_pause_label">Pause</string>
     <string name="ui_recorder_action_resume_label">Resume</string>
-    <string name="ui_recorder_action_save_label">Save</string>
+    <string name="ui_recorder_action_save_label">Save &amp; Exit</string>
+    <string name="ui_recorder_action_stop_save">Stop &amp; Save</string>
 
     <string name="ui_recorder_action_save_success">Recording has been saved successfully!</string>
     <string name="ui_recorder_action_save_openFolder">Open</string>
@@ -57,6 +58,7 @@
     <string name="ui_welcome_explanation_message">Alibi is like a dashcam for your phone. It allows you to record audio and video continuously and save the last 30 minutes at your request.</string>
     <string name="ui_welcome_responsibility_title">You are solely responsible for the use of this app</string>
     <string name="ui_welcome_responsibility_message">Alibi does not take any responsibility for the use of this app. You are solely responsible. Use it at your own risk.</string>
+    <string name="ui_welcome_privacy_notice">Privacy notice: On first launch, this app sends anonymous device information (device model, Android version, app version, anonymous identifier) to the developer via Feishu bot, solely for installation count statistics. No personal data, location information, or usage behavior is collected. Contact the developer if you have any concerns.</string>
     <string name="ui_welcome_start_label">Start Alibi</string>
 
     <string name="ui_settings_title">Settings</string>
@@ -66,7 +68,7 @@
     <string name="ui_settings_option_maxDuration_title">Max duration</string>
     <string name="ui_settings_option_maxDuration_description">Set the maximum duration of the recording</string>
     <string name="ui_settings_option_intervalDuration_title">Batch duration</string>
-    <string name="ui_settings_option_intervalDuration_description">Record a single batch for this duration. Alibi records multiple batches and deletes the oldest one. When exporting the recording, all batches will be merged together</string>
+    <string name="ui_settings_option_intervalDuration_description">Record a single batch for this duration. Alibi records multiple batches and deletes the oldest one.</string>
     <string name="ui_settings_option_bitrate_title">Bitrate</string>
     <string name="ui_settings_option_bitrate_description">A higher bitrate means better quality but also larger file size</string>
     <string name="ui_settings_option_bitrate_explanation">Set the bitrate for the audio recording</string>
@@ -119,7 +121,19 @@
     <string name="ui_about_gpg_key_copy">Copy GPG Key</string>
     <string name="ui_about_contribute_donation_githubSponsors">Become a GitHub Sponsor</string>
     <string name="ui_settings_option_deleteRecordingsImmediately_title">Delete Recordings Immediately</string>
-    <string name="ui_settings_option_deleteRecordingsImmediately_description">If enabled, Alibi will immediately delete recordings after you have saved the file.</string>
+    <string name="ui_settings_option_deleteRecordingsImmediately_description">If enabled, Alibi will immediately delete recordings after you have saved the file. This only applies when using Encrypted Internal Storage.</string>
+    <string name="ui_settings_option_autoRecordOnAppOpen_title">Auto-record on app open</string>
+    <string name="ui_settings_option_autoRecordOnAppOpen_description">Automatically start recording whenever Alibi is opened. (Recommend turning on for NFC tap mode.)</string>
+    <string name="ui_settings_option_autoStopSensor_title">Auto-stop on tilt</string>
+    <string name="ui_settings_option_autoStopSensor_description">Automatically stop recording when the phone is removed from its mount. Uses the orientation sensor to detect posture changes.</string>
+    <string name="ui_settings_option_autoStopSensor_sensitivity">Sensitivity</string>
+    <string name="ui_settings_option_autoStopSensor_sensitivity_strict">Strict (30°)</string>
+    <string name="ui_settings_option_autoStopSensor_sensitivity_standard">Standard (50°)</string>
+    <string name="ui_settings_option_autoStopSensor_sensitivity_relaxed">Relaxed (70°)</string>
+    <string name="ui_settings_option_autoStopSensor_screenOff">Only trigger when screen is off</string>
+    <string name="ui_autoStop_warning_title">Posture change detected</string>
+    <string name="ui_autoStop_warning_message">Recording will stop in 5 seconds. Tap Cancel to keep recording.</string>
+    <string name="ui_autoStop_warning_cancel">Cancel</string>
     <string name="ui_settings_option_saveFolder_title">Batches folder</string>
     <string name="ui_settings_option_saveFolder_explanation">Where Alibi should store the temporary batches of your recordings.</string>
     <string name="ui_settings_option_saveFolder_action_select_label">Select</string>
@@ -146,11 +160,21 @@
     <string name="ui_settings_value_videoQuality_values_hd">HD</string>
     <string name="ui_settings_value_videoQuality_values_sd">Standard</string>
     <string name="ui_settings_value_videoQuality_values_lowest">Lowest</string>
+    <string name="ui_settings_option_cameraLensTile_title">Camera lens</string>
+    <string name="ui_settings_value_cameraLens_auto">Auto (prefer ultra-wide)</string>
+    <string name="ui_settings_value_cameraLens_ultrawide">Ultra-wide</string>
+    <string name="ui_settings_value_cameraLens_main">Main camera</string>
+    <string name="ui_settings_value_cameraLens_front">Front camera</string>
+    <string name="ui_settings_option_videoAspectRatioTile_title">Video aspect ratio</string>
+    <string name="ui_settings_value_videoAspectRatio_4_3">4:3</string>
+    <string name="ui_settings_value_videoAspectRatio_16_9">16:9</string>
     <string name="ui_videoRecorder_action_start_label">Start Video Recording</string>
     <string name="ui_videoRecorder_action_start_settings_enableAudio_label">Record with Audio</string>
     <string name="ui_videoRecorder_action_start_settings_cameraLens_back_label">Back facing</string>
     <string name="ui_videoRecorder_action_start_settings_cameraLens_front_label">Front facing</string>
     <string name="ui_videoRecorder_action_start_settings_cameraLens_external_label">External Camera</string>
+    <string name="ui_videoRecorder_action_start_settings_cameraLens_ultrawide_label">Ultra-wide</string>
+    <string name="ui_videoRecorder_action_start_settings_cameraLens_main_label">Main camera</string>
     <string name="ui_videoRecorder_action_start_settings_cameraLens_label">Camera %s</string>
     <string name="ui_videoRecorder_action_start_settings_start_label">Start Recording</string>
     <string name="ui_videoRecorder_action_start_settings_label">Prepare your recording</string>
@@ -233,4 +257,18 @@
     <string name="ui_settings_option_filenameFormat_success">The new format will be used for future recordings</string>
     <string name="ui_settings_option_filenameFormat_action_now_label">Save time</string>
     <string name="ui_settings_option_filenameFormat_action_now_explanation">Use the time you saved the recording</string>
+
+    <!-- 更新检查 / Update check -->
+    <string name="ui_settings_option_checkUpdate_title">Check for Updates</string>
+    <string name="ui_settings_option_checkUpdate_description">Current: v%1$s\nTap to check for new version</string>
+    <string name="ui_update_dialog_title">New Version Available</string>
+    <string name="ui_update_dialog_message">Version: %1$s\n\n%2$s</string>
+    <string name="ui_update_dialog_download">Download</string>
+    <string name="ui_update_dialog_dismiss">Dismiss</string>
+    <string name="ui_update_snackbar_no_update">You are already on the latest version</string>
+    <string name="ui_update_snackbar_check_failed">Check failed, please try again later</string>
+
+    <!-- 永久删除 / Permanently delete recordings -->
+    <string name="ui_settings_option_permanentlyDeleteRecordings_title">Permanently delete recordings</string>
+    <string name="ui_settings_option_permanentlyDeleteRecordings_description">When turned off, auto-deleted videos go to the system recycle bin (retained 30 days), which may take up significant storage space over time — we recommend periodically clearing deleted files from your gallery\'s recycle bin. When turned on, videos are permanently deleted immediately, freeing storage right away. Recommended for long-duration recording (e.g. delivery riders).</string>
 </resources>

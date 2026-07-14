@@ -45,6 +45,7 @@ import app.myzel394.alibi.R
 import app.myzel394.alibi.db.AppSettings
 import app.myzel394.alibi.ui.BIG_PRIMARY_BUTTON_MAX_WIDTH
 import app.myzel394.alibi.ui.BIG_PRIMARY_BUTTON_SIZE
+import app.myzel394.alibi.ui.components.RecorderScreen.atoms.BannerAd
 import app.myzel394.alibi.ui.components.RecorderScreen.atoms.LowStorageInfo
 import app.myzel394.alibi.ui.components.RecorderScreen.molecules.AudioRecordingStart
 import app.myzel394.alibi.ui.components.RecorderScreen.molecules.QuickMaxDurationSelector
@@ -67,6 +68,7 @@ fun StartRecording(
     onHideTopBar: () -> Unit,
     onShowTopBar: () -> Unit,
     showAudioRecorder: Boolean,
+    onDismissAd: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val orientation = LocalConfiguration.current.orientation
@@ -135,6 +137,18 @@ fun StartRecording(
                 }
 
                 else -> {
+                    // ── 广告占位区（默认不显示，远程开关控制）──
+                    val showAd = appSettings.adEnabled
+                        && appSettings.adDismissedVersion < appSettings.adVersion
+                        && appSettings.adImageUrl.isNotEmpty()
+
+                    if (showAd) {
+                        BannerAd(
+                            imageUrl = appSettings.adImageUrl,
+                            clickUrl = appSettings.adClickUrl,
+                            onDismiss = onDismissAd,
+                        )
+                    }
                     Spacer(modifier = Modifier.weight(1f))
 
                     if (showAudioRecorder)

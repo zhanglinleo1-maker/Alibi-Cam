@@ -35,8 +35,8 @@ android {
         applicationId "app.myzel394.alibi"
         minSdk 24
         targetSdk 34
-        versionCode 16
-        versionName "0.5.3"
+        versionCode 17
+        versionName "0.6.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -123,7 +123,13 @@ dependencies {
 
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.1'
 
-    implementation 'com.arthenica:ffmpeg-kit-full-gpl:5.1'
+    // ffmpeg-kit-full-gpl:5.1 removed from Maven Central (project archived 2024-2025)
+    // Using local AAR downloaded from Appodeal mirror (6.0-2.LTS)
+    // NOTE: This AAR is missing its smart-exception dependency, so we add it explicitly.
+    // Without smart-exception-java, FFmpegKitConfig will crash with NoClassDefFoundError.
+    implementation(files("libs/ffmpeg-kit-full-gpl.aar"))
+    implementation("com.arthenica:smart-exception-java:0.2.1")
+    implementation("com.arthenica:smart-exception-common:0.2.1")
 
     implementation "androidx.datastore:datastore-preferences:1.1.1"
 

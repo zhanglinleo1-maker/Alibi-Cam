@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import app.myzel394.alibi.R
+import app.myzel394.alibi.dataStore
 import app.myzel394.alibi.db.AppSettings
 import app.myzel394.alibi.db.RecordingInformation
 import app.myzel394.alibi.ui.components.RecorderScreen.organisms.AudioRecordingStatus
@@ -33,6 +34,7 @@ import app.myzel394.alibi.ui.components.RecorderScreen.organisms.VideoRecordingS
 import app.myzel394.alibi.ui.models.AudioRecorderModel
 import app.myzel394.alibi.ui.models.VideoRecorderModel
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,6 +46,8 @@ fun RecorderScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val dataStore = context.dataStore
 
     RecorderEventsHandler(
         settings = settings,
@@ -126,6 +130,13 @@ fun RecorderScreen(
                     },
                     onShowTopBar = {
                         topBarVisible = true
+                    },
+                    onDismissAd = {
+                        scope.launch {
+                            dataStore.updateData {
+                                it.setAdDismissedVersion(settings.adVersion)
+                            }
+                        }
                     },
                 )
         }

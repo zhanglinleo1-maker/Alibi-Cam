@@ -16,9 +16,11 @@ import java.time.LocalDateTime
 class AppSettingsSerializer : Serializer<AppSettings> {
     override val defaultValue: AppSettings = AppSettings.getDefaultInstance()
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     override suspend fun readFrom(input: InputStream): AppSettings {
         return try {
-            Json.decodeFromString(
+            json.decodeFromString(
                 AppSettings.serializer(),
                 input.readBytes().decodeToString()
             )

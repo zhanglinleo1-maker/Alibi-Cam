@@ -29,7 +29,6 @@ import app.myzel394.alibi.ui.components.RecorderScreen.molecules.MicrophoneStatu
 import app.myzel394.alibi.ui.components.RecorderScreen.molecules.RecordingControl
 import app.myzel394.alibi.ui.components.RecorderScreen.molecules.RecordingStatus
 import app.myzel394.alibi.ui.models.AudioRecorderModel
-import app.myzel394.alibi.ui.utils.KeepScreenOn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
@@ -49,7 +48,6 @@ fun AudioRecordingStatus(
         }
     }
 
-    KeepScreenOn()
     Column(
         modifier = Modifier
             .fillMaxSize()
