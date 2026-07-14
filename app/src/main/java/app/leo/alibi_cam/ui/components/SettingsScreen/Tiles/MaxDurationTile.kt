@@ -1,0 +1,103 @@
+package app.leo.alibi_cam.ui.components.SettingsScreen.Tiles
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import app.leo.alibi_cam.R
+import app.leo.alibi_cam.dataStore
+import app.leo.alibi_cam.db.AppSettings
+import app.leo.alibi_cam.db.AudioRecorderSettings
+import app.leo.alibi_cam.ui.components.atoms.ExampleListRoulette
+import app.leo.alibi_cam.ui.components.atoms.SettingsTile
+import app.leo.alibi_cam.ui.utils.IconResource
+import app.leo.alibi_cam.ui.utils.formatDuration
+import com.maxkeppeker.sheets.core.models.base.Header
+import com.maxkeppeker.sheets.core.models.base.IconSource
+import com.maxkeppeker.sheets.core.models.base.rememberUseCaseState
+import com.maxkeppeler.sheets.duration.DurationDialog
+import com.maxkeppeler.sheets.duration.models.DurationConfig
+import com.maxkeppeler.sheets.duration.models.DurationFormat
+import com.maxkeppeler.sheets.duration.models.DurationSelection
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MaxDurationTile(
+    settings: AppSettings,
+) {
+    val scope = rememberCoroutineScope()
+    val showDialog = rememberUseCaseState()
+    val dataStore = LocalContext.current.dataStore
+
+    fun updateValue(maxDuration: Long) {
+        scope.launch {
+            if (maxDuration < settings.intervalDuration) {
+                dataStore.updateData {
+                    it.setIntervalDuration(maxDuration)
+                }
+            }
+
+            dataStore.updateData {
+                it.setMaxDuration(maxDuration)
+            }
+        }
+    }
+
+    DurationDialog(
+        state = showDialog,
+        header = Header.Default(
+            title = stringResource(R.string.ui_settings_option_maxDuration_title),
+            icon = IconSource(
+                painter = IconResource.fromImageVector(Icons.Default.Timer).asPainterResource(),
+                contentDescription = null,
+            )
+        ),
+        selection = DurationSelection { newTimeInSeconds ->
+            updateValue(newTimeInSeconds * 1000L)
+        },
+        config = DurationConfig(
+            timeFormat = DurationFormat.HH_MM,
+            currentTime = settings.maxDuration / 1000,
+            minTime = 60,
+            maxTime = 23 * 60 * 60 + 59 * 60,
+        )
+    )
+    SettingsTile(
+        title = stringResource(R.string.ui_settings_option_maxDuration_title),
+        description = stringResource(R.string.ui_settings_option_maxDuration_description),
+        leading = {
+            Icon(
+                Icons.Default.Timer,
+                contentDescription = null,
+            )
+        },
+        trailing = {
+            Button(
+                onClick = showDialog::show,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text(formatDuration(settings.maxDuration))
+            }
+        },
+        extra = {
+            ExampleListRoulette(
+                items = AudioRecorderSettings.EXAMPLE_MAX_DURATIONS,
+                onItemSelected = ::updateValue,
+            ) { maxDuration ->
+                Text(formatDuration(maxDuration))
+            }
+        }
+    )
+}

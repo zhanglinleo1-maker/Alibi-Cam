@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace 'app.myzel394.alibi'
+    namespace 'app.leo.alibi_cam'
     compileSdk 34
 
     def keystoreProperties = new Properties()
@@ -32,7 +32,7 @@ android {
 
     defaultConfig {
         multiDexEnabled true
-        applicationId "app.myzel394.alibi"
+        applicationId "app.leo.alibi_cam"
         minSdk 24
         targetSdk 34
         versionCode 17
