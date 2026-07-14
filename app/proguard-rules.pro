@@ -24,3 +24,22 @@
 # Without these, FFmpegKitConfig crashes with NoClassDefFoundError
 # when auto-stop triggers getRecordingInformation() → getBatchesForFFmpeg().
 -keep class com.arthenica.smartexception.** { *; }
+
+# ── kotlinx.serialization ──
+# 防止 R8 移除 @Serializable 类的序列化器，导致 DataStore 读写静默失败。
+# Without these, saveLastRecording() writes to DataStore fail silently,
+# and the "Save & Exit" flow appears to do nothing.
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keepclassmembers class kotlinx.serialization.json.** {
+    *** Companion;
+}
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,includedescriptorclasses class app.leo.alibi_cam.db.**$$serializer { *; }
+-keepclassmembers class app.leo.alibi_cam.db.** {
+    *** Companion;
+}
+-keep,includedescriptorclasses class app.leo.alibi_cam.db.RecordingInformation { *; }
+-keep,includedescriptorclasses class app.leo.alibi_cam.db.AppSettings { *; }
