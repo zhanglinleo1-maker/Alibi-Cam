@@ -279,31 +279,35 @@ class VideoRecorderService :
             // 同步永久删除标志（基类 deleteOldRecordings() 也做了，但本覆写不走 super）
             batchesFolder.permanentlyDeleteRecordings = settings.permanentlyDeleteRecordings
 
-            val maxDuration = settings.maxDuration
-            val intervalDuration = settings.intervalDuration
-            val maxChunks = (maxDuration / intervalDuration).toInt()
+            val maxDurationMs = settings.maxDuration // 已是毫秒
 
-            Log.i(TAG, "🧹 Flat pruning: type=${batchesFolder.type}, maxDuration=$maxDuration, intervalDuration=$intervalDuration, maxChunks=$maxChunks, counter=$counter")
-            CameraDebugLog.append("🧹 Flat pruning: max=$maxChunks, counter=$counter")
+            Log.i(TAG, "🧹 Duration pruning: maxDurationMs=$maxDurationMs")
+            CameraDebugLog.append("🧹 Duration pruning: maxDurationMs=$maxDurationMs")
 
-            if (maxChunks <= 0) return
+            if (maxDurationMs <= 0) return
 
-            val allChunks = batchesFolder.listFlatChunkNames()
-            Log.i(TAG, "🧹 listFlatChunkNames → ${allChunks.size} chunks: $allChunks")
+            val chunks = batchesFolder.listFlatChunksWithDuration()
+            var totalMs = chunks.sumOf { it.second }
 
-            if (allChunks.size <= maxChunks) return
+            Log.i(TAG, "🧹 ${chunks.size} chunks, totalMs=$totalMs")
+            CameraDebugLog.append("🧹 ${chunks.size} chunks, totalMs=$totalMs")
 
-            val excess = allChunks.size - maxChunks
-            Log.i(TAG, "🧹 Deleting $excess oldest chunks (total=${allChunks.size}, max=$maxChunks)")
-            CameraDebugLog.append("🧹 Pruning $excess oldest (total=${allChunks.size}, max=$maxChunks)")
+            if (totalMs <= maxDurationMs) return
 
-            for (i in 0 until excess) {
-                val deleted = batchesFolder.deleteFlatChunk(allChunks[i])
-                Log.i(TAG, "🧹 deleteFlatChunk(${allChunks[i]}) → $deleted")
+            var deleted = 0
+            for ((name, durationMs) in chunks) {
+                if (totalMs <= maxDurationMs) break
+                val ok = batchesFolder.deleteFlatChunk(name)
+                if (ok) {
+                    totalMs -= durationMs
+                    deleted++
+                }
+                Log.i(TAG, "🧹 deleteFlatChunk($name) dur=${durationMs}ms → $ok, remaining=$totalMs")
+                CameraDebugLog.append("🧹 deleteFlatChunk($name) dur=${durationMs}ms → $ok, remaining=$totalMs")
             }
 
-            Log.i(TAG, "🧹 Pruning complete")
-            CameraDebugLog.append("🧹 Pruning complete")
+            Log.i(TAG, "🧹 Duration pruning complete: deleted $deleted chunks, final=$totalMs ms")
+            CameraDebugLog.append("🧹 Duration pruning: deleted $deleted chunks, final=$totalMs ms")
             CameraDebugLog.flush()
         } catch (e: Exception) {
             Log.e(TAG, "🧹 deleteOldRecordings FAILED: ${e.javaClass.simpleName}: ${e.message}", e)

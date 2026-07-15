@@ -178,6 +178,10 @@ fun _PrimitiveControls(audioRecorder: AudioRecorderModel) {
                 runCatching {
                     audioRecorder.destroyService(context)
                 }
+
+                // 关闭 App（同 auto-stop）
+                val am = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                am.appTasks.forEach { it.finishAndRemoveTask() }
             }
         },
         onSaveCurrent = {

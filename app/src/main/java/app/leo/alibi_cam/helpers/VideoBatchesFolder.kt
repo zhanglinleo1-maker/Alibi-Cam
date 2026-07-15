@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
@@ -231,59 +232,64 @@ class VideoBatchesFolder(
         }
     }
 
-    // ── Flat storage (no task subfolders) ──────────────────────────────────
-    // When sessionId is set, chunks are stored directly in the base folder
-    // with names like: alibi-video_recordings-{sessionId}-{counter}.mp4
-    // This avoids RELATIVE_PATH-based MediaStore queries, which are unreliable
-    // on some OEM firmware (e.g. Xiaomi HyperOS).
-
     /**
-     * Lists ALL chunk display names across all sessions, sorted
-     * lexicographically (= chronologically for timestamp-based names).
+     * Lists ALL chunk (display name → duration millis) across all sessions,
+     * sorted lexicographically (= chronologically for timestamp-based names).
+     *
+     * For MEDIA type the duration comes from MediaStore.DURATION (free, fast).
+     * For INTERNAL/CUSTOM we estimate from file size ÷ typical bitrate,
+     * since pulling true duration would require MediaMetadataRetriever (slow).
      */
-    fun listFlatChunkNames(): List<String> {
+    fun listFlatChunksWithDuration(): List<Pair<String, Long>> {
         return when (type) {
             BatchType.INTERNAL -> {
                 getInternalFolder().listFiles()
                     ?.filter { it.isFile && it.name?.startsWith(mediaPrefix) == true }
-                    ?.map { it.name!! }
-                    ?.sorted()
+                    ?.map { it.name!! to (it.length() * 8 / TYPICAL_BITRATE_BPS) }
+                    ?.sortedBy { it.first }
                     ?: emptyList()
             }
             BatchType.CUSTOM -> {
                 getCustomDefinedFolder().listFiles()
                     .filter { it.isFile && it.name?.startsWith(mediaPrefix) == true }
-                    .map { it.name!! }
-                    .sorted()
+                    .map { f -> f.name!! to (f.length() * 8 / TYPICAL_BITRATE_BPS) }
+                    .sortedBy { it.first }
             }
             BatchType.MEDIA -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val names = mutableListOf<String>()
+                    val result = mutableListOf<Pair<String, Long>>()
                     context.contentResolver.query(
                         scopedMediaContentUri,
-                        arrayOf(MediaStore.Video.Media.DISPLAY_NAME),
+                        arrayOf(
+                            MediaStore.Video.Media.DISPLAY_NAME,
+                            MediaStore.Video.Media.DURATION,
+                        ),
                         "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?",
                         arrayOf("$mediaPrefix%"),
                         null,
                     )?.use { cursor ->
+                        val nameIdx = cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME)
+                        val durIdx = cursor.getColumnIndex(MediaStore.Video.Media.DURATION)
                         while (cursor.moveToNext()) {
-                            val name = cursor.getString(0) ?: continue
-                            if (name.startsWith(mediaPrefix)) {
-                                names.add(name)
-                            }
+                            val name = cursor.getString(nameIdx) ?: continue
+                            if (!name.startsWith(mediaPrefix)) continue
+                            val durationMs = cursor.getLong(durIdx)
+                            result.add(name to durationMs)
                         }
                     }
-                    names.sorted()
+                    result.sortedBy { it.first }
                 } else {
                     legacyMediaFolder.listFiles()
                         ?.filter { it.isFile && it.name?.startsWith(mediaPrefix) == true }
-                        ?.map { it.name!! }
-                        ?.sorted()
+                        ?.map { it.name!! to (it.length() * 8 / TYPICAL_BITRATE_BPS) }
+                        ?.sortedBy { it.first }
                         ?: emptyList()
                 }
             }
         }
     }
+
+    // ── Flat storage (no task subfolders) ──────────────────────────────────
 
     /**
      * Deletes a single chunk by its display name (flat storage).
@@ -300,33 +306,47 @@ class VideoBatchesFolder(
             BatchType.MEDIA -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     if (permanentlyDeleteRecordings) {
-                        // 物理删除：先删物理文件（绕过回收站），再清 MediaStore 条目
+                        // 永久删除（绕过小米回收站）：
+                        // Xiaomi HyperOS 会拦截 contentResolver.delete()，自动把媒体文件
+                        // 移入回收站。经实测，File.delete() 和 openFileDescriptor("w") 截断
+                        // 都不可靠。
+                        //
+                        // 策略：先把文件改名（非媒体扩展名 .tmp），再标记为 IS_PENDING，
+                        // 最后从 MediaStore 删除。对小米而言，一个未完成的 .tmp 文件不值得回收。
                         var deleted = false
                         context.contentResolver.query(
                             scopedMediaContentUri,
-                            arrayOf(
-                                MediaStore.Video.Media._ID,
-                                MediaStore.Video.Media.RELATIVE_PATH,
-                            ),
+                            arrayOf(MediaStore.Video.Media._ID),
                             "${MediaStore.Video.Media.DISPLAY_NAME} = ?",
                             arrayOf(name),
                             null,
                         )?.use { cursor ->
                             if (cursor.moveToFirst()) {
                                 val id = cursor.getLong(0)
-                                val relPath = cursor.getString(1) ?: ""
                                 val uri = ContentUris.withAppendedId(
                                     scopedMediaContentUri, id
                                 )
-                                // 物理删除文件
-                                val physicalFile = java.io.File(
-                                    Environment.getExternalStorageDirectory(),
-                                    relPath + name
-                                )
-                                physicalFile.delete()
-                                // 清理 MediaStore 条目
-                                context.contentResolver.delete(uri, null, null)
-                                deleted = true
+
+                                // Step 1: 改名 + 标为 pending（告诉系统"这文件不要了"）
+                                try {
+                                    val cv = ContentValues().apply {
+                                        put(MediaStore.Video.Media.IS_PENDING, 1)
+                                        put(MediaStore.Video.Media.DISPLAY_NAME,
+                                            ".trash-${System.currentTimeMillis()}.tmp")
+                                    }
+                                    context.contentResolver.update(uri, cv, null, null)
+                                    Log.i(TAG, "perm-del: renamed $name → pending .tmp")
+                                    CameraDebugLog.append("perm-del: renamed $name → pending .tmp")
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "perm-del: rename $name FAILED: ${e.message}")
+                                    CameraDebugLog.append("perm-del: rename $name FAILED: ${e.message}")
+                                }
+
+                                // Step 2: 从 MediaStore 删除（此时已是 .tmp pending 文件）
+                                val rows = context.contentResolver.delete(uri, null, null)
+                                deleted = rows > 0
+                                Log.i(TAG, "perm-del: $name deleted=$deleted (rows=$rows)")
+                                CameraDebugLog.append("perm-del: $name deleted=$deleted (rows=$rows)")
                             }
                         }
                         deleted
@@ -501,6 +521,13 @@ class VideoBatchesFolder(
     }
 
     companion object {
+        private const val TAG = "VideoBatchesFolder"
+
+        // Typical video bitrate for duration estimation (bps).
+        // Default is 2 Mbps; used only for INTERNAL/CUSTOM types
+        // where MediaStore.DURATION is not available.
+        private const val TYPICAL_BITRATE_BPS = 2_000_000L
+
         fun viaInternalFolder(context: Context) = VideoBatchesFolder(context, BatchType.INTERNAL)
 
         fun viaCustomFolder(context: Context, folder: DocumentFile) =
