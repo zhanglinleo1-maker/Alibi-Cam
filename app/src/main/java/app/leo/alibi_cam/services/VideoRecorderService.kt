@@ -276,6 +276,9 @@ class VideoRecorderService :
      */
     override fun deleteOldRecordings() {
         try {
+            // 同步永久删除标志（基类 deleteOldRecordings() 也做了，但本覆写不走 super）
+            batchesFolder.permanentlyDeleteRecordings = settings.permanentlyDeleteRecordings
+
             val maxDuration = settings.maxDuration
             val intervalDuration = settings.intervalDuration
             val maxChunks = (maxDuration / intervalDuration).toInt()

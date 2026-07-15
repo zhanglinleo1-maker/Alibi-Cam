@@ -287,6 +287,8 @@ class VideoBatchesFolder(
 
     /**
      * Deletes a single chunk by its display name (flat storage).
+     * When [permanentlyDeleteRecordings] is true, physically deletes the file
+     * before removing the MediaStore entry (bypassing Xiaomi/HyperOS recycle bin).
      */
     fun deleteFlatChunk(name: String): Boolean {
         return when (type) {
@@ -297,12 +299,45 @@ class VideoBatchesFolder(
             }
             BatchType.MEDIA -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val deleted = context.contentResolver.delete(
-                        scopedMediaContentUri,
-                        "${MediaStore.Video.Media.DISPLAY_NAME} = ?",
-                        arrayOf(name),
-                    )
-                    deleted > 0
+                    if (permanentlyDeleteRecordings) {
+                        // 物理删除：先删物理文件（绕过回收站），再清 MediaStore 条目
+                        var deleted = false
+                        context.contentResolver.query(
+                            scopedMediaContentUri,
+                            arrayOf(
+                                MediaStore.Video.Media._ID,
+                                MediaStore.Video.Media.RELATIVE_PATH,
+                            ),
+                            "${MediaStore.Video.Media.DISPLAY_NAME} = ?",
+                            arrayOf(name),
+                            null,
+                        )?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                val id = cursor.getLong(0)
+                                val relPath = cursor.getString(1) ?: ""
+                                val uri = ContentUris.withAppendedId(
+                                    scopedMediaContentUri, id
+                                )
+                                // 物理删除文件
+                                val physicalFile = java.io.File(
+                                    Environment.getExternalStorageDirectory(),
+                                    relPath + name
+                                )
+                                physicalFile.delete()
+                                // 清理 MediaStore 条目
+                                context.contentResolver.delete(uri, null, null)
+                                deleted = true
+                            }
+                        }
+                        deleted
+                    } else {
+                        val deleted = context.contentResolver.delete(
+                            scopedMediaContentUri,
+                            "${MediaStore.Video.Media.DISPLAY_NAME} = ?",
+                            arrayOf(name),
+                        )
+                        deleted > 0
+                    }
                 } else {
                     File(legacyMediaFolder, name).delete()
                 }
